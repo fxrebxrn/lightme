@@ -12,6 +12,23 @@ import tempfile
 import sqlite3
 import shutil
 
+async def download_db(message: types.Message):
+    if message.from_user.id != config.ADMIN_ID:
+        return
+
+    db_path = "/app/data/database.db" # Переконайся, що шлях веде до Volume
+
+    if os.path.exists(db_path):
+        # Використовуємо open(), щоб правильно передати файл
+        with open(db_path, 'rb') as f:
+            await message.answer_document(f, caption="📂 База даних з Volume (/app/data)")
+    else:
+        try:
+            content = os.listdir('/app/data')
+            await message.answer(f"❌ database.db не знайдено.\nВміст папки data: <code>{', '.join(content) if content else 'ПУСТО'}</code>", parse_mode='HTML')
+        except Exception as e:
+            await message.answer(f"❌ Помилка доступу до /app/data: {e}")
+            
 async def upload_db_via_bot(message: types.Message):
     # Только админ может загружать
     if message.from_user.id != config.ADMIN_ID:
@@ -344,6 +361,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
