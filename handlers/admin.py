@@ -10,6 +10,7 @@ from database.db import get_stats
 import os
 import tempfile
 import sqlite3
+import shutil
 
 async def upload_db_via_bot(message: types.Message):
     # Только админ может загружать
@@ -21,26 +22,24 @@ async def upload_db_via_bot(message: types.Message):
     if doc.file_name != 'database.db':
         return await message.answer("Файл повинен називатися точно <code>database.db</code>.", parse_mode='HTML')
 
-    # Ограничение размера (примерно 50MB) — подкорректируй при необходимости
+    # Ограничение размера (примерно 50MB)
     MAX_SIZE = 50 * 1024 * 1024
     if doc.file_size and doc.file_size > MAX_SIZE:
         return await message.answer(f"Файл забагато. Максимум {MAX_SIZE // (1024*1024)} MB.")
 
     # Скачиваем во временный файл
+    temp_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, prefix="db_upload_", suffix=".db") as tf:
             temp_path = tf.name
         await message.document.download(destination_file=temp_path)
     except Exception as e:
-        # cleanup
-        try:
+        if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
-        except Exception:
-            pass
         await message.answer(f"❌ Не вдалося завантажити файл: {e}")
         return
 
-    # Простейшая валидация: можно ли открыть и есть ли таблицы
+    # Простейшая валидация
     try:
         con = sqlite3.connect(f"file:{temp_path}?mode=ro", uri=True, timeout=5)
         cur = con.cursor()
@@ -48,14 +47,12 @@ async def upload_db_via_bot(message: types.Message):
         _ = cur.fetchone()
         con.close()
     except Exception as e:
-        try:
+        if os.path.exists(temp_path):
             os.remove(temp_path)
-        except Exception:
-            pass
         await message.answer(f"❌ Файл не валідна SQLite база: {e}")
         return
 
-    # Путь к рабочей базе в контейнере Railway (у тебя volume /app/data)
+    # Путь к рабочей базе (volume /app/data)
     dst = "/app/data/database.db"
     backup_path = dst + ".bak"
 
@@ -63,46 +60,36 @@ async def upload_db_via_bot(message: types.Message):
         # Создаём резервную копию текущей БД (если существует)
         if os.path.exists(dst):
             try:
-                # перезаписываем backup если уже есть
+                # ВАЖНО: Тут тоже используем shutil.move вместо os.replace
                 if os.path.exists(backup_path):
                     os.remove(backup_path)
-                os.replace(dst, backup_path)
+                shutil.move(dst, backup_path)
             except Exception as e:
-                # не критично, но логируем (если есть лог-система)
                 print("Warning: cannot create backup of existing DB:", e)
 
-        # Атомично заменяем
-        os.replace(temp_path, dst)
+        # Атомично заменяем (ИСПОЛЬЗУЕМ shutil.move!)
+        shutil.move(temp_path, dst)
+        
+        # Даем права на файл (на всякий случай для Docker)
+        os.chmod(dst, 0o666)
+        
     except Exception as e:
         # попытка отката из backup
         try:
             if os.path.exists(backup_path) and not os.path.exists(dst):
-                os.replace(backup_path, dst)
+                shutil.move(backup_path, dst)
         except Exception:
             pass
         await message.answer(f"❌ Помилка при заміні бази: {e}")
         return
+    finally:
+        # Чистим временный файл если он остался
+        if temp_path and os.path.exists(temp_path):
+            try: os.remove(temp_path)
+            except: pass
 
     # Уведомляем админа
     await message.answer("✅ Базу успішно замінено. Потрібно перезапустити бота, щоб нова база почала використовуватись.")
-
-async def download_db(message: types.Message):
-    if message.from_user.id != config.ADMIN_ID:
-        return
-
-    # Путь к базе внутри Volume
-    db_path = "data/database.db" 
-
-    if os.path.exists(db_path):
-        file = types.InputFile(db_path)
-        await message.answer_document(file, caption="📂 База данных из Volume (/app/data)")
-    else:
-        # Если файла нет, проверим, что вообще есть в папке data
-        try:
-            content = os.listdir('data')
-            await message.answer(f"❌ Файл database.db не найден в /data.\nСодержимое папки: <code>{', '.join(content) if content else 'ПУСТО'}</code>")
-        except Exception as e:
-            await message.answer(f"❌ Ошибка доступа к /data: {e}")
         
 async def admin_stats(message: types.Message):
     # Перевірка, чи це адмін (додай свій ID у config.py)
@@ -357,6 +344,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
