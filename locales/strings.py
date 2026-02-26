@@ -30,11 +30,11 @@ TEXTS = {
         'reminder_on': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Нагадування: очікуване ввімкнення світла в черзі {company} {queue} через 10 хв.',
         
         # --- НОВІ ПОВІДОМЛЕННЯ ---
-        'off_now': '<tg-emoji emoji-id="5258240177440065529">🔴</tg-emoji> Світло ВИМКНЕНО в черзі {company} {queue}.', # Для сумісності
-        'on_now': '<tg-emoji emoji-id="5258473286790058066">🟢</tg-emoji> Світло УВІМКНЕНО в черзі {company} {queue}.',   # Для сумісності
+        'off_now': '<tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> Світло ВИМКНЕНО в черзі {company} {queue}.', # Для сумісності
+        'on_now': '<tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> Світло УВІМКНЕНО в черзі {company} {queue}.',   # Для сумісності
         
-        'off_now_extended': '<tg-emoji emoji-id="5258240177440065529">🔴</tg-emoji> Світло <b>ВИМКНЕНО</b> в черзі {company} {queue} | <i>{time}</i>.\n\n<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Наступне ввімкнення о {next_time} <i>(Через {duration})</i>.',
-        'on_now_extended': '<tg-emoji emoji-id="5258473286790058066">🟢</tg-emoji> Світло <b>УВІМКНЕНО</b> в черзі {company} {queue} | <i>{time}</i>.\n\n<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Наступне вимкнення о {next_time} <i>(Через {duration})</i>.',
+        'off_now_extended': '<tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> Світло <b>ВИМКНЕНО</b> в черзі {company} {queue} | <i>{time}</i>.\n\n<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Наступне ввімкнення о {next_time} <i>(Через {duration})</i>.',
+        'on_now_extended': '<tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> Світло <b>УВІМКНЕНО</b> в черзі {company} {queue} | <i>{time}</i>.\n\n<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Наступне вимкнення о {next_time} <i>(Через {duration})</i>.',
         
         'units_hours': 'год.', # або 'години', універсально для повідомлень
         'units_minutes': 'хв.',
@@ -111,11 +111,11 @@ TEXTS = {
         'reminder_on': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Напоминание: ожидаемое включение света в очереди {company} {queue} через 10 минут.',
         
         # --- НОВЫЕ СООБЩЕНИЯ ---
-        'off_now': '<tg-emoji emoji-id="5258240177440065529">🔴</tg-emoji> Свет ОТКЛЮЧЁН в очереди {company} {queue}.',
-        'on_now': '<tg-emoji emoji-id="5258473286790058066">🟢</tg-emoji> Свет ВКЛЮЧЁН в очереди {company} {queue}.',
+        'off_now': '<tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> Свет ОТКЛЮЧЁН в очереди {company} {queue}.',
+        'on_now': '<tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> Свет ВКЛЮЧЁН в очереди {company} {queue}.',
         
-        'off_now_extended': '<tg-emoji emoji-id="5258240177440065529">🔴</tg-emoji> Свет <b>ОТКЛЮЧЁН</b> в очереди {company} {queue} | <i>{time}</i>.\n\n<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Следующее включение в {next_time} <i>(Через {duration})</i>.',
-        'on_now_extended': '<tg-emoji emoji-id="5258473286790058066">🟢</tg-emoji> Свет <b>ВКЛЮЧЁН</b> в очереди {company} {queue} | <i>{time}</i>.\n\n<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Следующее отключение в {next_time} <i>(Через {duration})</i>.',
+        'off_now_extended': '<tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> Свет <b>ОТКЛЮЧЁН</b> в очереди {company} {queue} | <i>{time}</i>.\n\n<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Следующее включение в {next_time} <i>(Через {duration})</i>.',
+        'on_now_extended': '<tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> Свет <b>ВКЛЮЧЁН</b> в очереди {company} {queue} | <i>{time}</i>.\n\n<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Следующее отключение в {next_time} <i>(Через {duration})</i>.',
 
         'units_hours': 'ч.', # или 'часа'
         'units_minutes': 'мин.',
@@ -166,6 +166,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
