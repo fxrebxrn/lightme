@@ -425,7 +425,7 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         return
 
     # Формат вывода: строки с эмодзи
-    lines = [f'<tg-emoji emoji-id="5255771138180553028">🔵</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5255771138180553028">🔵</tg-emoji> {format_minutes(e)}' for s, e in common]
+    lines = [f'<tg-emoji emoji-id="5262602219240326742">🤩</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5262602219240326742">🤩</tg-emoji> {format_minutes(e)}' for s, e in common]
     header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=date_str)
     text = f"{header}\n\n" + "\n".join(lines)
 
@@ -504,7 +504,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         for s, e in ons:
             is_common = any(not (e <= cs or s >= ce) for cs, ce in common_intervals)
             prefix = "" if is_common else ""
-            lines.append(f'{prefix}<tg-emoji emoji-id="5258473286790058066">🟢</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5258240177440065529">🔴</tg-emoji> {format_minutes(e)}')
+            lines.append(f'{prefix}<tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> {format_minutes(e)}')
     
         if not lines:
             return get_text(lang, 'no_schedule_short')
@@ -685,7 +685,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
             schedule_text = f"📅 {target_date_str}\n\n✅ <b>{get_text(lang, 'no_outages')}</b>"
         else:
             # 3. Нормальний графік
-            res = "\n".join([f'<tg-emoji emoji-id="5258240177440065529">🔴</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5258473286790058066">🟢</tg-emoji> {r["on_time"]}' for r in rows if r['off_time'] != 'empty'])
+            res = "\n".join([f'<tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> {r["on_time"]}' for r in rows if r['off_time'] != 'empty'])
             schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res, updated=rows[0]['created_at'])
 
     # Кнопки навігації
@@ -880,6 +880,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     async def _delete_sub_wrapper(call: types.CallbackQuery):
         await delete_sub(call, scheduler)
     dp.register_callback_query_handler(_delete_sub_wrapper, lambda c: c.data and c.data.startswith('del_'))
+
 
 
 
