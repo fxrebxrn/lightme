@@ -717,34 +717,64 @@ async def my_queues(message: types.Message):
     await message.answer(get_text(lang, 'btn_my_queues'), reply_markup=kb)
 
 async def delete_sub(call: types.CallbackQuery, scheduler):
+    # 1. Определяем язык пользователя
     lang = get_user_lang(call.from_user.id)
+    
     try:
+        # Извлекаем ID подписки из callback_data
         sub_id = call.data.split("_", 1)[1]
     except Exception:
-        await call.answer(get_text(lang, "invalid_data") if get_text else "Невірні дані", show_alert=True)
+        msg = get_text(lang, "invalid_data") if get_text else "Невірні дані"
+        await call.answer(msg, show_alert=True)
         return
 
-    # Удаляем подписку из БД
+    # 2. Удаляем подписку из БД
     with get_db() as conn:
         conn.execute("DELETE FROM users WHERE id=?", (sub_id,))
         conn.commit()
 
-    try:
-        await call.answer(get_text(lang, 'deleted'), show_alert=True)
-    except Exception:
-        await call.answer("Видалено", show_alert=True)
+    # Показываем уведомление об удалении
+    await call.answer(get_text(lang, 'deleted'), show_alert=True)
 
-    # --- Правильное обновление планировщика ---
+    # 3. Обновляем планировщик
     try:
         from services.scheduler import rebuild_jobs
         await rebuild_jobs(call.bot, scheduler)
     except Exception as e:
-        print("Failed to rebuild scheduler after subscription delete:", e)
+        print(f"Failed to rebuild scheduler: {e}")
 
+    # 4. ОБНОВЛЕНИЕ МЕНЮ (Локализованное)
+    with get_db() as conn:
+        cur = conn.cursor()
+        # Важно: используй правильное имя колонки для ID пользователя (user_id или telegram_id)
+        cur.execute("SELECT * FROM users WHERE user_id=?", (call.from_user.id,))
+        remaining_subs = cur.fetchall()
+
+    if not remaining_subs:
+        # Если очередей больше нет, показываем текст "Нет очередей" на текущем языке
+        new_text = get_text(lang, 'no_subs')
+        new_kb = None # Или кнопка "Назад"
+    else:
+        # Если очереди остались, вызываем ТУ ЖЕ функцию, что рисует меню "Мои очереди"
+        # Я не знаю точное название твоей функции, обычно это что-то вроде:
+        from keyboards.inline import get_my_queues_keyboard 
+        
+        new_text = get_text(lang, 'my_subs')
+        new_kb = get_my_queues_keyboard(remaining_subs, lang)
+
+    # 5. Редактируем сообщение (вместо удаления)
     try:
-        await call.message.delete()
+        await call.message.edit_text(
+            text=new_text, 
+            reply_markup=new_kb, 
+            parse_mode='HTML'
+        )
     except Exception:
-        pass
+        # Если вдруг что-то пошло не так при редактировании, просто удаляем (план Б)
+        try:
+            await call.message.delete()
+        except:
+            pass
 
 async def support_cmd(message: types.Message):
     lang = get_user_lang(message.from_user.id)
@@ -880,6 +910,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     async def _delete_sub_wrapper(call: types.CallbackQuery):
         await delete_sub(call, scheduler)
     dp.register_callback_query_handler(_delete_sub_wrapper, lambda c: c.data and c.data.startswith('del_'))
+
 
 
 
