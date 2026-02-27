@@ -746,20 +746,23 @@ async def delete_sub(call: types.CallbackQuery, scheduler):
     # 4. ОБНОВЛЕНИЕ МЕНЮ (Локализованное)
     with get_db() as conn:
         cur = conn.cursor()
-        # Важно: используй правильное имя колонки для ID пользователя (user_id или telegram_id)
+        # Проверь, как называется колонка: user_id или telegram_id
         cur.execute("SELECT * FROM users WHERE user_id=?", (call.from_user.id,))
         remaining_subs = cur.fetchall()
 
     if not remaining_subs:
-        # Если очередей больше нет, показываем текст "Нет очередей" на текущем языке
+        # Если пусто — пишем, что черг нет
         new_text = get_text(lang, 'no_subs')
-        new_kb = None # Или кнопка "Назад"
+        new_kb = None 
     else:
-        # Если очереди остались, вызываем ТУ ЖЕ функцию, что рисует меню "Мои очереди"
-        # Я не знаю точное название твоей функции, обычно это что-то вроде:
+        # Если остались — ГЕНЕРИРУЕМ НОВУЮ КЛАВИАТУРУ
+        new_text = get_text(lang, 'my_subs')
+        
+        # ВНИМАНИЕ: Тебе нужно найти функцию, которая создает инлайн-кнопки черг.
+        # Обычно она в файле keyboards/inline.py и называется как-то так:
         from keyboards.inline import get_my_queues_keyboard 
         
-        new_text = get_text(lang, 'my_subs')
+        # Мы вызываем её СНОВА с обновленным списком remaining_subs
         new_kb = get_my_queues_keyboard(remaining_subs, lang)
 
     # 5. Редактируем сообщение (вместо удаления)
@@ -910,6 +913,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     async def _delete_sub_wrapper(call: types.CallbackQuery):
         await delete_sub(call, scheduler)
     dp.register_callback_query_handler(_delete_sub_wrapper, lambda c: c.data and c.data.startswith('del_'))
+
 
 
 
