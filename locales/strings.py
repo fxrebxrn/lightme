@@ -16,10 +16,10 @@ TEXTS = {
         'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}\n\n<i>Оновлено: {updated}</i>',
         'no_schedule': '<tg-emoji emoji-id="5258503720928288433">ℹ️</tg-emoji> На жаль, графік для цієї черги на обрану дату ще не завантажено.',
         'back': '⬅️ Назад',
-        'limit_error': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Максимум 5 черг! Видаліть щось.',
-        'added': '<tg-emoji emoji-id="5260341314095947411">👀</tg-emoji> Підписано: {company} {queue}',
-        'exists': '<tg-emoji emoji-id="5260341314095947411">👀</tg-emoji> Ви підписані.',
-        'deleted': '<tg-emoji emoji-id="5258130763148172425">🗑</tg-emoji> Видалено',
+        'limit_error': '❗️ Максимум 5 черг! Видаліть щось.',
+        'added': '✅ Підписано: {company} {queue}',
+        'exists': '✅ Ви підписані.',
+        'deleted': '✅ Видалено',
         'empty_list': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Список підписок порожній.',
         'support_text': '<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>Підтримка:</b> {user}\n<tg-emoji emoji-id="5987880246865565644">💰</tg-emoji> <b>Донат:</b> {url}\n<tg-emoji emoji-id="5771868281212245617">📢</tg-emoji> <b>Наш канал (FAQ, тех. підтримка)</b>: https://t.me/lightmetech',
         'tech_work': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> <b>Технічні роботи</b>\nБот тимчасово недоступний. Спробуйте пізніше.\nСлідкуйте за новинами бота на нашому каналі @lightmetech',
@@ -97,10 +97,10 @@ TEXTS = {
         'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}\n\n<i>Обновлено: {updated}</i>',
         'no_schedule': '<tg-emoji emoji-id="5258503720928288433">ℹ️</tg-emoji> К сожалению, график для этой очереди на выбранную дату еще не загружен.',
         'back': '⬅️ Назад',
-        'limit_error': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Максимум 5 очередей! Удалите что-то.',
-        'added': '<tg-emoji emoji-id="5260341314095947411">👀</tg-emoji> Подписано: {company} {queue}',
-        'exists': '<tg-emoji emoji-id="5260341314095947411">👀</tg-emoji> Вы подписаны.',
-        'deleted': '<tg-emoji emoji-id="5258130763148172425">🗑</tg-emoji> Удалено',
+        'limit_error': '❗️ Максимум 5 очередей! Удалите что-то.',
+        'added': '✅ Подписано: {company} {queue}',
+        'exists': '✅ Вы подписаны.',
+        'deleted': '✅ Удалено',
         'empty_list': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Список подписок пуст.',
         'support_text': '<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>Поддержка:</b> {user}\n<tg-emoji emoji-id="5987880246865565644">💰</tg-emoji> <b>Донат:</b> {url}\n<tg-emoji emoji-id="5771868281212245617">📢</tg-emoji> <b>Наш канал (FAQ, тех. поддержка)</b>: https://t.me/lightmetech',
         'tech_work': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> <b>Технические работы</b>\nБот временно недоступен. Попробуйте позже.\nСледите за обновлениями бота на нашем канале @lightmetech',
@@ -166,6 +166,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
