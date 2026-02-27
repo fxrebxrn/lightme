@@ -882,7 +882,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_callback_query_handler(show_main_menu, text="menu_start")
 
     dp.register_message_handler(view_schedules_start, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["графік", "график"]))
-    dp.register_message_handler(add_queue_btn, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["додати", "добавить"]))
+    dp.register_message_handler(add_queue_btn, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["додати", "добавить"]), commands=['add'])
     dp.register_message_handler(my_queues, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["мої чер", "мои оче"]))
 
     support_labels = (get_text('uk', 'btn_support'), get_text('ru', 'btn_support'))
@@ -911,6 +911,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     async def _delete_sub_wrapper(call: types.CallbackQuery):
         await delete_sub(call, scheduler)
     dp.register_callback_query_handler(_delete_sub_wrapper, lambda c: c.data and c.data.startswith('del_'))
+
 
 
 
