@@ -934,6 +934,3 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
 
 
-
-
-
