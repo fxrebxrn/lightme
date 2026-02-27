@@ -721,7 +721,7 @@ async def delete_sub(call: types.CallbackQuery, scheduler):
     lang = get_user_lang(call.from_user.id)
     
     try:
-        # Извлекаем ID подписки из callback_data
+        # Извлекаем ID строки из callback_data (например, 'del_5' -> '5')
         sub_id = call.data.split("_", 1)[1]
     except Exception:
         msg = get_text(lang, "invalid_data") if get_text else "Невірні дані"
@@ -733,51 +733,49 @@ async def delete_sub(call: types.CallbackQuery, scheduler):
         conn.execute("DELETE FROM users WHERE id=?", (sub_id,))
         conn.commit()
 
-    # Показываем уведомление об удалении
-    await call.answer(get_text(lang, 'deleted'), show_alert=True)
+    # Всплывающее уведомление
+    await call.answer(get_text(lang, 'deleted'), show_alert=False)
 
-    # 3. Обновляем планировщик
+    # 3. Обновляем планировщик уведомлений
     try:
         from services.scheduler import rebuild_jobs
         await rebuild_jobs(call.bot, scheduler)
     except Exception as e:
         print(f"Failed to rebuild scheduler: {e}")
 
-    # 4. ОБНОВЛЕНИЕ МЕНЮ (Локализованное)
+    # 4. ФОРМИРУЕМ ОБНОВЛЕННОЕ МЕНЮ
     with get_db() as conn:
-        cur = conn.cursor()
-        # Проверь, как называется колонка: user_id или telegram_id
-        cur.execute("SELECT * FROM users WHERE user_id=?", (call.from_user.id,))
-        remaining_subs = cur.fetchall()
+        # Получаем актуальный список черг пользователя
+        rows = conn.execute(
+            "SELECT id, company, queue FROM users WHERE user_id=?", 
+            (call.from_user.id,)
+        ).fetchall()
 
-    if not remaining_subs:
-        # Если пусто — пишем, что черг нет
-        new_text = get_text(lang, 'no_subs')
-        new_kb = None 
+    if not rows:
+        # Если черг больше нет
+        new_text = get_text(lang, 'empty_list')
+        new_kb = None # Или можно добавить кнопку "Назад"
     else:
-        # Если остались — ГЕНЕРИРУЕМ НОВУЮ КЛАВИАТУРУ
-        new_text = get_text(lang, 'my_subs')
-        
-        # ВНИМАНИЕ: Тебе нужно найти функцию, которая создает инлайн-кнопки черг.
-        # Обычно она в файле keyboards/inline.py и называется как-то так:
-        from keyboards.inline import get_my_queues_keyboard 
-        
-        # Мы вызываем её СНОВА с обновленным списком remaining_subs
-        new_kb = get_my_queues_keyboard(remaining_subs, lang)
+        # Если черги остались — создаем новую клавиатуру
+        new_text = get_text(lang, 'btn_my_queues')
+        new_kb = types.InlineKeyboardMarkup()
+        for r in rows:
+            # Создаем кнопки заново с актуальными ID
+            new_kb.add(types.InlineKeyboardButton(
+                f"🗑 {r['company']} {r['queue']}", 
+                callback_data=f"del_{r['id']}"
+            ))
 
-    # 5. Редактируем сообщение (вместо удаления)
+    # 5. Редактируем текущее сообщение (Бесшовное обновление)
     try:
         await call.message.edit_text(
             text=new_text, 
             reply_markup=new_kb, 
             parse_mode='HTML'
         )
-    except Exception:
-        # Если вдруг что-то пошло не так при редактировании, просто удаляем (план Б)
-        try:
-            await call.message.delete()
-        except:
-            pass
+    except Exception as e:
+        # Если текст не изменился, Telegram выдаст ошибку, просто игнорируем её
+        pass
 
 async def support_cmd(message: types.Message):
     lang = get_user_lang(message.from_user.id)
@@ -913,6 +911,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     async def _delete_sub_wrapper(call: types.CallbackQuery):
         await delete_sub(call, scheduler)
     dp.register_callback_query_handler(_delete_sub_wrapper, lambda c: c.data and c.data.startswith('del_'))
+
 
 
 
