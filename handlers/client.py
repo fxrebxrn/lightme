@@ -898,7 +898,11 @@ async def inline_echo(inline_query: types.InlineQuery):
         ]
         schedule_text = "<b>Графік на сьогодні:</b>\n" + "\n".join(lines)
 
-    result_text = f"<b>📅 {company} | Черга {queue}</b>\n\n{schedule_text}"
+    result_text = (
+        f"<b>📅 {company} | Черга {queue}</b>\n\n"
+        f"{schedule_text}\n\n"
+        f"💡 <a href='https://t.me/lightmeuaBot'>Моніторінг графіків</a>"
+    )
 
     # Создаем кнопки переключения
     # Используем твой существующий cb_sched для кнопок
@@ -990,6 +994,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
