@@ -379,7 +379,7 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         target_date = (now + timedelta(days=1)).date()
     else:
         target_date = now.date()
-    date_str = target_date.strftime('%d.%m.%Y')
+    date_str = target_date.strftime('%Y-%m-%d')
 
     with get_db() as conn:
         rows1 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp1, q1, date_str)).fetchall()
@@ -451,7 +451,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         target_date = (now + timedelta(days=1)).date()
     else:
         target_date = now.date()
-    date_str = target_date.strftime('%d.%m.%Y')
+    date_str = target_date.strftime('%Y-%m-%d')
 
     with get_db() as conn:
         rows1 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp1, q1, date_str)).fetchall()
@@ -552,7 +552,7 @@ def queues_kb(action_type, company, lang):
     btns = []
     
     # Получаем текущую дату для инициализации кнопок просмотра
-    today_str = datetime.now(UA_TZ).strftime('%d.%m.%Y')
+    today_str = datetime.now(UA_TZ).strftime('%Y-%m-%d')
     
     for q in queues:
         if action_type == 'view':
@@ -567,7 +567,7 @@ def queues_kb(action_type, company, lang):
 
 # --- Обработчики ---
 async def check_time_cmd(message: types.Message):
-    now = datetime.now(UA_TZ).strftime('%d.%m.%Y %H:%M:%S')
+    now = datetime.now(UA_TZ).strftime('%Y-%m-%d %H:%M:%S')
     await message.answer(f"Server time (Europe/Kyiv): {now}")
 
 async def start_cmd(message: types.Message):
@@ -663,8 +663,8 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     lang = get_user_lang(call.from_user.id)
     
     now_ua = datetime.now(UA_TZ)
-    today_str = now_ua.strftime('%d.%m.%Y')
-    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%d.%m.%Y')
+    today_str = now_ua.strftime('%Y-%m-%d')
+    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%Y-%m-%d')
     
     if not target_date_str:
         target_date_str = today_str
@@ -877,8 +877,8 @@ async def inline_echo(inline_query: types.InlineQuery):
     today_dt = now_ua
     tomorrow_dt = now_ua + timedelta(days=1)
     
-    today_db = today_dt.strftime('%d.%m.%Y')
-    tomorrow_db = tomorrow_dt.strftime('%d.%m.%Y')
+    today_db = today_dt.strftime('%Y-%m-%d')
+    tomorrow_db = tomorrow_dt.strftime('%Y-%m-%d')
 
     # Логіка вибору дати
     target_date_db = today_db
@@ -998,35 +998,3 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
