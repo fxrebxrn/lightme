@@ -15,7 +15,7 @@ TEXTS = {
         'choose_comp': '<tg-emoji emoji-id="5967816500415827773">💻</tg-emoji> Оберіть компанію:',
         'choose_queue': '<tg-emoji emoji-id="5257963315258204021">🏘</tg-emoji> Оберіть чергу для <b>{company}</b>:',
         'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}\n\n<i>Оновлено: {updated}</i>',
-        'no_schedule': '<tg-emoji emoji-id="5258503720928288433">ℹ️</tg-emoji> На жаль, графік для цієї черги на обрану дату ще не завантажено.',
+        'no_schedule': '❗️ На жаль, графік для цієї черги на обрану дату ще не завантажено.',
         'back': '⬅️ Назад',
         'limit_error': '❗️ Максимум 5 черг! Видаліть щось.',
         'added': '✅ Підписано: {company} {queue}',
@@ -97,7 +97,7 @@ TEXTS = {
         'choose_comp': '<tg-emoji emoji-id="5967816500415827773">💻</tg-emoji> Выберите компанию:',
         'choose_queue': '<tg-emoji emoji-id="5257963315258204021">🏘</tg-emoji> Выберите очередь для <b>{company}</b>:',
         'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}\n\n<i>Обновлено: {updated}</i>',
-        'no_schedule': '<tg-emoji emoji-id="5258503720928288433">ℹ️</tg-emoji> К сожалению, график для этой очереди на выбранную дату еще не загружен.',
+        'no_schedule': '❗️ К сожалению, график для этой очереди на выбранную дату еще не загружен.',
         'back': '⬅️ Назад',
         'limit_error': '❗️ Максимум 5 очередей! Удалите что-то.',
         'added': '✅ Подписано: {company} {queue}',
@@ -168,6 +168,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
