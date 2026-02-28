@@ -863,64 +863,70 @@ async def inline_echo(inline_query: types.InlineQuery):
     if not query_text:
         return
 
-    # Розбиваємо запит на частини (напр. ["дтек", "5.1", "завтра"])
+    # Розбиваємо запит на частини
     parts = query_text.split()
     if len(parts) < 2:
         return
 
-    # Перші два елементи — це завжди компанія та черга
+    # Компанія та черга
     company = parts[0].upper().replace('DTEK', 'ДТЕК')
     queue = parts[1]
     
     # Визначаємо дати
     now_ua = datetime.now(UA_TZ)
-    today_str = now_ua.strftime('%Y-%m-%d')
-    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%Y-%m-%d')
+    today_dt = now_ua
+    tomorrow_dt = now_ua + timedelta(days=1)
+    
+    today_db = today_dt.strftime('%Y-%m-%d')
+    tomorrow_db = tomorrow_dt.strftime('%Y-%m-%d')
 
-    # Логіка вибору дати на основі ключових слів
-    target_date = today_str
+    # Логіка вибору дати
+    target_date_db = today_db
+    display_date = today_dt.strftime('%d.%m.%Y') # Формат 01.03.2026
     day_label = "на сьогодні"
     
-    # Шукаємо слова завтра/сьогодні у всьому тексті запиту
+    # Перевірка на ключові слова
     if any(word in query_text for word in ['завтра']):
-        target_date = tomorrow_str
+        target_date_db = tomorrow_db
+        display_date = tomorrow_dt.strftime('%d.%m.%Y')
         day_label = "на завтра"
     elif any(word in query_text for word in ['сегодня', 'сьогодні', 'сьогодня']):
-        target_date = today_str
+        target_date_db = today_db
+        display_date = today_dt.strftime('%d.%m.%Y')
         day_label = "на сьогодні"
 
     # Отримуємо дані з БД
     with get_db() as conn:
         rows = conn.execute(
             "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", 
-            (company, queue, target_date)
+            (company, queue, target_date_db)
         ).fetchall()
 
     # Формуємо текст графіка
     if not rows:
-        schedule_text = f"Графік {day_label} не знайдений."
+        schedule_text = f"Графік на {display_date} не знайдений."
     elif rows[0]['off_time'] == 'empty':
-        schedule_text = "✅ <b>Світло не вимикатимуть!</b> 🎉"
+        schedule_text = f"✅ <b>На {display_date} відключень не планується!</b> 🎉"
     else:
-        # Використовуємо твої преміум-емодзі та тройні лапки для безпеки
+        # Використовуємо твої преміум-емодзі
         lines = [
             f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
             for r in rows
         ]
-        schedule_text = f"<b>Графік {day_label}:</b>\n" + "\n".join(lines)
+        schedule_text = f"<b>Графік на {display_date}:</b>\n" + "\n".join(lines)
 
-    # Фінальний текст повідомлення
+    # Фінальний текст повідомлення (зі зміненою датою)
     result_text = (
         f"<b>📅 {company} | Черга {queue}</b>\n\n"
         f"{schedule_text}\n\n"
         f"💡 <a href='https://t.me/lightmeuaBot'>Моніторінг графіків</a>"
     )
 
-    # Створюємо картку результату (БЕЗ КНОПОК)
+    # Картка результату
     item = types.InlineQueryResultArticle(
         id=str(uuid.uuid4()),
-        title=f"Графік {company} {queue} ({day_label})",
-        description="Натисніть, щоб надіслати графік у чат",
+        title=f"Графік {company} {queue} ({day_label})", # Тут залишається "на завтра/на сьогодні"
+        description=f"Переглянути графік на {display_date}",
         input_message_content=types.InputTextMessageContent(
             message_text=result_text,
             parse_mode="HTML",
@@ -992,6 +998,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
