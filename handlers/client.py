@@ -884,12 +884,12 @@ async def inline_echo(inline_query: types.InlineQuery):
         ).fetchall()
 
     if not rows:
-        schedule_text = "📭 Графік на сьогодні не знайдений."
+        schedule_text = "Графік на сьогодні не знайдений."
     else:
-        lines = [f"""<tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> {r['on_time']}""" for r in rows]
+        lines = [f"""🔴 {r['off_time']} - 🟢 {r['on_time']}""" for r in rows]
         schedule_text = "\n".join(lines)
 
-    result_text = f'<b><tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {company} | Черга {queue}</b>\n\n<b>Сьогодні ({today_str}):</b>\n{schedule_text}'
+    result_text = f'<b>📅 {company} | Черга {queue}</b>\n\n<b>Сьогодні ({today_str}):</b>\n{schedule_text}'
 
     # Создаем кнопки переключения
     # Используем твой существующий cb_sched для кнопок
@@ -909,7 +909,7 @@ async def inline_echo(inline_query: types.InlineQuery):
     item = types.InlineQueryResultArticle(
         id=str(uuid.uuid4()),
         title=f"Графік {company} {queue}",
-        description=f"✅ Натисніть, щоб надіслати графік з вибором дати",
+        description=f"Натисніть, щоб надіслати графік з вибором дати",
         input_message_content=types.InputTextMessageContent(
             message_text=result_text,
             parse_mode="HTML"
@@ -981,6 +981,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
