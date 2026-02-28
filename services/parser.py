@@ -13,9 +13,8 @@ def parse_schedule_text(text):
         return None, None, []
 
     company = "ЦЕК" if "ЦЕК" in match.group(1) else "ДТЕК"
-    date_str = match.group(2) # 29.01.2026
+    date_str = match.group(2) 
     
-    # Конвертуємо в YYYY-MM-DD для БД
     try:
         date_obj = datetime.strptime(date_str, '%d.%m.%Y')
         db_date = date_obj.strftime('%Y-%m-%d')
@@ -29,22 +28,30 @@ def parse_schedule_text(text):
         line = line.strip()
         if not line: continue
 
-        queue_match = re.search(r'(?:Черга|Група)\s*(\d+\.\d+)', line, re.IGNORECASE)
+        # Визначаємо чергу
+        queue_match = re.search(r'(?:Черга|Група)\s*(\d+(?:\.\d+)?)', line, re.IGNORECASE)
         if queue_match:
             current_queue = queue_match.group(1)
             continue
             
-        # --- НОВА ФІШКА: Ловимо прочерк або слова "немає", "0" ---
-        if line in ['-', 'немає', 'нет', '0', 'нема'] and current_queue:
+        # --- ВИПРАВЛЕННЯ: Ігноруємо "немає відключень" ---
+        # Якщо в рядку написано "немає", "нет", "0" або "-", 
+        # ми просто не додаємо цей запис у результати.
+        # Тоді планувальник не буде намагатися парсити прочерки.
+        clean_line = line.lower().replace(" ", "")
+        if clean_line in ['-', 'немає', 'нет', '0', 'нема', 'відключеньнемає']:
+            # Додаємо спеціальну "затичку", щоб база знала, що ми оновили дані, 
+            # але відключень реально 0. Ми використаємо слово 'empty'.
             results.append({
                 'company': company,
                 'queue': current_queue,
                 'date': db_date,
-                'off_time': '-', # Спеціальний маркер
-                'on_time': '-'
+                'off_time': 'empty', 
+                'on_time': 'empty'
             })
             continue
 
+        # Парсимо час (напр. 10:00 - 14:00)
         time_match = re.findall(r'(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})', line)
         if time_match and current_queue:
             for start, end in time_match:
