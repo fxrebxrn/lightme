@@ -677,33 +677,54 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     kb = types.InlineKeyboardMarkup(row_width=1)
     
-    # 1. Якщо записів немає взагалі
+    # 1. Формируем основной текст
     if not rows:
         schedule_text = f"📅 {target_date_str}\n\n" + get_text(lang, 'no_schedule')
+    elif rows[0]['off_time'] == 'empty':
+        schedule_text = f"📅 {target_date_str}\n\n✅ <b>{get_text(lang, 'no_outages')}</b>"
     else:
-        # 2. Якщо є маркер 'empty' (відключень немає)
-        if rows[0]['off_time'] == 'empty':
-            schedule_text = f"📅 {target_date_str}\n\n✅ <b>{get_text(lang, 'no_outages')}</b>"
-        else:
-            # 3. Нормальний графік
-            res = "\n".join([f'<tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> {r["on_time"]}' for r in rows if r['off_time'] != 'empty'])
-            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res, updated=rows[0]['created_at'])
+        # Используем тройные кавычки для безопасности f-строки
+        res = "\n".join([
+            f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
+            for r in rows if r['off_time'] != 'empty'
+        ])
+        schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res, updated=rows[0]['created_at'])
 
-    # Кнопки навігації
+    # 2. Добавляем твою ссылку (как в инлайн-эхо)
+    schedule_text += f"\n\n💡 <a href='https://t.me/lightmeuaBot'>Моніторінг графіків</a>"
+
+    # 3. Кнопки навигации
     if target_date_str == today_str:
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'tomorrow_label'), callback_data=cb_sched.new(comp=comp, queue=q, date=tomorrow_str), style="primary"))
+        kb.add(types.InlineKeyboardButton(get_text(lang, 'tomorrow_label'), callback_data=cb_sched.new(comp=comp, queue=q, date=tomorrow_str)))
     else:
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'today_label'), callback_data=cb_sched.new(comp=comp, queue=q, date=today_str), style="primary"))
+        kb.add(types.InlineKeyboardButton(get_text(lang, 'today_label'), callback_data=cb_sched.new(comp=comp, queue=q, date=today_str)))
 
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"vcomp_{comp}", style="danger"))
+    # Кнопку "Назад" добавляем только если это обычное сообщение (не инлайн)
+    if call.message:
+        kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"vcomp_{comp}"))
 
+    # 4. ЛОГИКА РЕДАКТИРОВАНИЯ (Главное исправление)
     try:
-        await call.message.edit_text(schedule_text, reply_markup=kb, parse_mode="HTML")
-    except Exception:
-        if not rows:
-            await call.answer(get_text(lang, 'no_schedule'), show_alert=True)
-        else:
-            await call.answer()
+        if call.inline_message_id:
+            # Если нажато в инлайн-режиме (@lightmeuaBot ...)
+            await call.bot.edit_message_text(
+                inline_message_id=call.inline_message_id,
+                text=schedule_text,
+                reply_markup=kb,
+                parse_mode="HTML",
+                disable_web_page_preview=True
+            )
+        elif call.message:
+            # Если нажато в обычном диалоге с ботом
+            await call.message.edit_text(
+                schedule_text, 
+                reply_markup=kb, 
+                parse_mode="HTML", 
+                disable_web_page_preview=True
+            )
+    except Exception as e:
+        print(f"Ошибка редактирования: {e}")
+        
     await call.answer()
 
 async def my_queues(message: types.Message):
@@ -994,6 +1015,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
