@@ -379,7 +379,7 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         target_date = (now + timedelta(days=1)).date()
     else:
         target_date = now.date()
-    date_str = target_date.strftime('%Y-%m-%d')
+    date_str = target_date.strftime('%d.%m.%Y')
 
     with get_db() as conn:
         rows1 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp1, q1, date_str)).fetchall()
@@ -451,7 +451,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         target_date = (now + timedelta(days=1)).date()
     else:
         target_date = now.date()
-    date_str = target_date.strftime('%Y-%m-%d')
+    date_str = target_date.strftime('%d.%m.%Y')
 
     with get_db() as conn:
         rows1 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp1, q1, date_str)).fetchall()
@@ -552,7 +552,7 @@ def queues_kb(action_type, company, lang):
     btns = []
     
     # Получаем текущую дату для инициализации кнопок просмотра
-    today_str = datetime.now(UA_TZ).strftime('%Y-%m-%d')
+    today_str = datetime.now(UA_TZ).strftime('%d.%m.%Y')
     
     for q in queues:
         if action_type == 'view':
@@ -567,7 +567,7 @@ def queues_kb(action_type, company, lang):
 
 # --- Обработчики ---
 async def check_time_cmd(message: types.Message):
-    now = datetime.now(UA_TZ).strftime('%Y-%m-%d %H:%M:%S')
+    now = datetime.now(UA_TZ).strftime('%d.%m.%Y %H:%M:%S')
     await message.answer(f"Server time (Europe/Kyiv): {now}")
 
 async def start_cmd(message: types.Message):
@@ -663,8 +663,8 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     lang = get_user_lang(call.from_user.id)
     
     now_ua = datetime.now(UA_TZ)
-    today_str = now_ua.strftime('%Y-%m-%d')
-    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%Y-%m-%d')
+    today_str = now_ua.strftime('%d.%m.%Y')
+    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%d.%m.%Y')
     
     if not target_date_str:
         target_date_str = today_str
@@ -877,8 +877,8 @@ async def inline_echo(inline_query: types.InlineQuery):
     today_dt = now_ua
     tomorrow_dt = now_ua + timedelta(days=1)
     
-    today_db = today_dt.strftime('%Y-%m-%d')
-    tomorrow_db = tomorrow_dt.strftime('%Y-%m-%d')
+    today_db = today_dt.strftime('%d.%m.%Y')
+    tomorrow_db = tomorrow_dt.strftime('%d.%m.%Y')
 
     # Логіка вибору дати
     target_date_db = today_db
@@ -913,7 +913,7 @@ async def inline_echo(inline_query: types.InlineQuery):
             f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
             for r in rows
         ]
-        schedule_text = f"<b>Графік на {display_date}:</b>\n" + "\n".join(lines)
+        schedule_text = f"<b>Графік на {display_date}:</b>\n" + "\n\n".join(lines)
 
     # Фінальний текст повідомлення (зі зміненою датою)
     result_text = (
@@ -926,7 +926,7 @@ async def inline_echo(inline_query: types.InlineQuery):
     item = types.InlineQueryResultArticle(
         id=str(uuid.uuid4()),
         title=f"Графік {company} {queue} ({day_label})", # Тут залишається "на завтра/на сьогодні"
-        description=f"Переглянути графік на {display_date}",
+        description=f"Натисніть, щоб відправити графік у чат",
         input_message_content=types.InputTextMessageContent(
             message_text=result_text,
             parse_mode="HTML",
@@ -998,6 +998,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
