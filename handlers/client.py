@@ -757,7 +757,7 @@ async def delete_sub(call: types.CallbackQuery, scheduler):
         new_kb = None # Или можно добавить кнопку "Назад"
     else:
         # Если черги остались — создаем новую клавиатуру
-        new_text = get_text(lang, 'btn_my_queues')
+        new_text = get_text(lang, 'my_que')
         new_kb = types.InlineKeyboardMarkup()
         for r in rows:
             # Создаем кнопки заново с актуальными ID
@@ -917,6 +917,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(support_cmd, commands=['support'])
     dp.register_message_handler(settings_cmd, commands=['settings'])
     dp.register_message_handler(compare_menu, commands=['compare'])
+
 
 
 
