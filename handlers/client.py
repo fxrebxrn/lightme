@@ -893,7 +893,6 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_callback_query_handler(handle_comp_selection, lambda c: c.data and c.data.startswith(('vcomp_', 'scomp_')))
     dp.register_callback_query_handler(show_sched, cb_sched.filter())
     
-    # --- ИСПРАВЛЕНИЕ: Передаем scheduler в сохранение ---
     async def _save_sub_wrapper(call: types.CallbackQuery, callback_data: dict):
         await save_sub(call, callback_data, scheduler)
     dp.register_callback_query_handler(_save_sub_wrapper, cb_menu.filter(action="save"))
@@ -907,15 +906,17 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(back_to_comp, text=["back_view", "back_sub"])
     
-    # --- ИСПРАВЛЕНИЕ: Передаем scheduler в удаление ---
     async def _delete_sub_wrapper(call: types.CallbackQuery):
         await delete_sub(call, scheduler)
     dp.register_callback_query_handler(_delete_sub_wrapper, lambda c: c.data and c.data.startswith('del_'))
 
-
-
-
-
+    dp.register_message_handler(view_schedules_start, commands=['sched'])
+    dp.register_message_handler(add_queue_btn, commands=['add'])
+    dp.register_message_handler(my_queues, commands=['subs'])
+    dp.register_message_handler(show_main_menu_msg, commands=['menu'])
+    dp.register_message_handler(support_cmd, commands=['support'])
+    dp.register_message_handler(settings_cmd, commands=['settings'])
+    dp.register_message_handler(compare_menu, commands=['compare'])
 
 
 
