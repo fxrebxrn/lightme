@@ -857,6 +857,67 @@ async def back_to_settings_from_notifications(call: types.CallbackQuery):
         await call.message.answer(get_text(lang, 'settings_text'), reply_markup=kb)
     await call.answer()
 
+async def inline_echo(inline_query: types.InlineQuery):
+    query_text = inline_query.query.strip().upper()
+    if not query_text:
+        return
+
+    # Парсим ввод, например: "ЦЕК 6.2"
+    parts = query_text.split()
+    if len(parts) < 2:
+        return
+
+    company = parts[0]
+    queue = parts[1]
+    
+    # Определяем даты
+    today_dt = datetime.now(UA_TZ)
+    today_str = today_dt.strftime('%Y-%m-%d')
+    tomorrow_str = (today_dt + timedelta(days=1)).strftime('%Y-%m-%d')
+
+    # Получаем график на СЕГОДНЯ для превью
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            (company, queue, today_str)
+        ).fetchall()
+
+    if not rows:
+        schedule_text = "Графік на сьогодні не знайдений."
+    else:
+        lines = [f"🔴 {r['off_time']} — 🟢 {r['on_time']}" for r in rows]
+        schedule_text = "\n".join(lines)
+
+    result_text = f"<b>📅 {company} | Черга {queue}</b>\n\n<b>Сьогодні ({today_str}):</b>\n{schedule_text}"
+
+    # Создаем кнопки переключения
+    # Используем твой существующий cb_sched для кнопок
+    markup = types.InlineKeyboardMarkup()
+    markup.row(
+        types.InlineKeyboardButton(
+            "📅 Сьогодні", 
+            callback_data=cb_sched.new(comp=company, queue=queue, date=today_str)
+        ),
+        types.InlineKeyboardButton(
+            "➡️ Завтра", 
+            callback_data=cb_sched.new(comp=company, queue=queue, date=tomorrow_str)
+        )
+    )
+
+    # Формируем результат инлайн-выдачи
+    item = types.InlineQueryResultArticle(
+        id=str(uuid.uuid4()),
+        title=f"Графік {company} {queue}",
+        description=f"Натисніть, щоб надіслати графік з вибором дати",
+        input_message_content=types.InputTextMessageContent(
+            message_text=result_text,
+            parse_mode="HTML"
+        ),
+        reply_markup=markup # ПРИКРЕПЛЯЕМ КНОПКИ
+    )
+
+    await inline_query.answer(results=[item], cache_time=1)
+
 # --- Реєстрація ---
 def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили scheduler
     dp.register_message_handler(compare_menu, lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare'))
@@ -917,6 +978,8 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(support_cmd, commands=['support'])
     dp.register_message_handler(settings_cmd, commands=['settings'])
     dp.register_message_handler(compare_menu, commands=['compare'])
+  
+    dp.register_inline_handler(inline_echo)
 
 
 
