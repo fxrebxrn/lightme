@@ -6,6 +6,7 @@ from locales.strings import get_text
 from datetime import datetime, timedelta
 import pytz
 import sqlite3
+import uuid
 
 COMPARE_STATE = {}
 # Часовой пояс Киева
@@ -980,6 +981,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
