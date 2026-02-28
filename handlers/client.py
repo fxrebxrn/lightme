@@ -714,7 +714,7 @@ async def my_queues(message: types.Message):
     kb = types.InlineKeyboardMarkup()
     for r in rows:
         kb.add(types.InlineKeyboardButton(f"🗑 {r['company']} {r['queue']}", callback_data=f"del_{r['id']}", style="danger"))
-    await message.answer(get_text(lang, 'btn_my_queues'), reply_markup=kb)
+    await message.answer(get_text(lang, 'my_que'), reply_markup=kb)
 
 async def delete_sub(call: types.CallbackQuery, scheduler):
     # 1. Определяем язык пользователя
