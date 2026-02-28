@@ -68,6 +68,40 @@ def get_next_off_event(company, queue, current_date_obj, current_time_str):
         
     return None
 
+
+def get_effective_on_event(company, queue, date_obj, on_time_str):
+    """
+    Возвращает фактическое время ВКЛЮЧЕНИЯ для текущего интервала.
+
+    Если интервал заканчивается около полуночи (23:59/00:00) и на следующий день
+    есть интервал с off_time=00:00, считаем это непрерывным отключением и переносим
+    время включения на on_time следующего дня.
+    """
+    effective_on_dt = parse_localized_datetime(date_obj.strftime('%Y-%m-%d'), on_time_str)
+    current_date = date_obj
+
+    # Ограничиваем глубину, чтобы защититься от потенциальных циклов в данных.
+    for _ in range(7):
+        if normalized_time_key(effective_on_dt.strftime('%H:%M')) not in ('23:59', '00:00'):
+            break
+
+        next_date_str = (current_date + timedelta(days=1)).strftime('%Y-%m-%d')
+        with get_db() as conn:
+            next_row = conn.execute(
+                "SELECT date, on_time FROM schedules "
+                "WHERE company=? AND queue=? AND date=? AND off_time='00:00' "
+                "ORDER BY on_time ASC LIMIT 1",
+                (company, queue, next_date_str)
+            ).fetchone()
+
+        if not next_row:
+            break
+
+        effective_on_dt = parse_localized_datetime(next_row['date'], next_row['on_time'])
+        current_date = datetime.strptime(next_row['date'], '%Y-%m-%d').date()
+
+    return effective_on_dt
+
 async def send_reminder(bot, user_id, company, queue, action, lang, next_event_str=None, duration_str=None, current_event_time_str=None):
     """Отправляет напоминание пользователю."""
     # action может быть: 'off'/'on' (reminder за 10 минут) или 'off_now'/'on_now' (уведомление в момент события)
@@ -225,9 +259,11 @@ async def rebuild_jobs(bot, scheduler):
                     # OFF NOW Notification
                     if off_t > now_ua and int(user['notify_off']) == 1:
                         # Логика для сообщения "Выключено. Включат через Х"
-                        # Следующее включение - это on_time ЭТОЙ ЖЕ строки
-                        next_on_time_str = on_t.strftime('%H:%M')
-                        duration_str = format_duration(off_t, on_t, lang)
+                        # Следующее включение может быть в следующем дне, если
+                        # есть связка 23:59 -> 00:00 (непрерывное отключение).
+                        effective_on_t = get_effective_on_event(company, queue, date_obj, on_time_str)
+                        next_on_time_str = effective_on_t.strftime('%H:%M')
+                        duration_str = format_duration(off_t, effective_on_t, lang)
                         current_time_str = off_t.strftime('%H:%M')
 
                         scheduler.add_job(send_reminder, 'date', run_date=off_t,
@@ -266,4 +302,5 @@ async def rebuild_jobs(bot, scheduler):
             print(f"Global error processing schedule row: {e}")
 
     print(f"✅ Задания планировщика обновлены: {datetime.now(UA_TZ)}")
+
 
