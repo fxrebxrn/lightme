@@ -918,7 +918,7 @@ async def inline_echo(inline_query: types.InlineQuery):
     item = types.InlineQueryResultArticle(
         id=str(uuid.uuid4()),
         title=f"Графік {company} {queue}",
-        description=f"Натисніть, щоб надіслати графік з вибором дати",
+        description=f"Натисніть, щоб надіслати графік",
         input_message_content=types.InputTextMessageContent(
             message_text=result_text,
             parse_mode="HTML"
@@ -990,6 +990,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
