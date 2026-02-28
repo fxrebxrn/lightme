@@ -879,17 +879,26 @@ async def inline_echo(inline_query: types.InlineQuery):
     # Получаем график на СЕГОДНЯ для превью
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", 
             (company, queue, today_str)
         ).fetchall()
 
+    # --- ИСПРАВЛЕННАЯ ЛОГИКА ВЫВОДА ---
     if not rows:
         schedule_text = "Графік на сьогодні не знайдений."
+    elif rows[0]['off_time'] == 'empty':
+        # Если в базе лежит маркер отсутствия отключений
+        schedule_text = "✅ <b>Світло не вимикатимуть!</b> 🎉"
     else:
-        lines = [f"""🔴 {r['off_time']} - 🟢 {r['on_time']}""" for r in rows]
-        schedule_text = "\n".join(lines)
+        # Если есть реальное время, формируем список с твоими премиум-эмодзи
+        # Используем тройные кавычки, чтобы не было ошибки SyntaxError с кавычками внутри
+        lines = [
+            f"""🔴 {r['off_time']} - 🟢 {r['on_time']}""" 
+            for r in rows
+        ]
+        schedule_text = "<b>Графік на сьогодні:</b>\n" + "\n".join(lines)
 
-    result_text = f'<b>📅 {company} | Черга {queue}</b>\n\n<b>Сьогодні ({today_str}):</b>\n{schedule_text}'
+    result_text = f"<b>📅 {company} | Черга {queue}</b>\n\n{schedule_text}"
 
     # Создаем кнопки переключения
     # Используем твой существующий cb_sched для кнопок
@@ -981,6 +990,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
