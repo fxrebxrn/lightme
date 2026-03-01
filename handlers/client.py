@@ -934,7 +934,7 @@ async def inline_echo(inline_query: types.InlineQuery):
         )
     )
 
-    await inline_query.answer(results=[item], cache_time=1)
+    await inline_query.answer(results=[item], cache_time=60)
 
 # --- Реєстрація ---
 def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили scheduler
@@ -998,4 +998,5 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
