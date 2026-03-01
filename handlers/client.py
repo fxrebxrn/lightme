@@ -679,15 +679,22 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     
     # 1. Якщо записів немає взагалі
     if not rows:
-        schedule_text = f"📅 {target_date_str}\n\n" + get_text(lang, 'no_schedule')
+        res_text = get_text(lang, 'no_schedule')
+        # Передаємо "-" замість часу оновлення, бо даних у базі немає
+        schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated="—")
     else:
         # 2. Якщо є маркер 'empty' (відключень немає)
         if rows[0]['off_time'] == 'empty':
-            schedule_text = f"📅 {target_date_str}\n\n✅ <b>{get_text(lang, 'no_outages')}</b>"
+            res_text = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
+            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated=rows[0]['created_at'])
         else:
             # 3. Нормальний графік
-            res = "\n".join([f'<tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> {r["on_time"]}' for r in rows if r['off_time'] != 'empty'])
-            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res, updated=rows[0]['created_at'])
+            # Використовуємо потрійні лапки для безпеки з емодзі та лапками словника
+            res_text = "\n".join([
+                f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
+                for r in rows if r['off_time'] != 'empty'
+            ])
+            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated=rows[0]['created_at'])
 
     # Кнопки навігації
     if target_date_str == today_str:
