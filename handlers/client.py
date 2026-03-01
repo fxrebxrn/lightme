@@ -675,43 +675,53 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     comp, q = callback_data['comp'], callback_data['queue']
     target_date_str = callback_data.get('date')
     lang = get_user_lang(call.from_user.id)
-    
+
     now_ua = datetime.now(UA_TZ)
-    today_str = now_ua.strftime('%d.%m.%Y')
-    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%d.%m.%Y')
-    
-    if not target_date_str:
-        target_date_str = today_str
+    today_str = now_ua.strftime('%Y-%m-%d')
+    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%Y-%m-%d')
+
+    # Для БД всегда используем YYYY-MM-DD
+    db_date_str = target_date_str or today_str
+    # Для пользователя показываем DD.MM.YYYY
+    display_date_str = format_display_date(db_date_str)
 
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT off_time, on_time, created_at FROM schedules WHERE company=? AND queue=? AND date=?", 
-            (comp, q, format_display_date(target_date_str))
+            "SELECT off_time, on_time, created_at FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp, q, db_date_str)
         ).fetchall()
 
     kb = types.InlineKeyboardMarkup(row_width=1)
-    
-    # 1. Якщо записів немає взагалі
-    if not rows:
-        res_text = get_text(lang, 'no_schedule')
-        # Передаємо "-" замість часу оновлення, бо даних у базі немає
-        schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=format_display_date(target_date_str), schedule=res_text, updated="—")
-    else:
-        # 2. Якщо є маркер 'empty' (відключень немає)
-        if rows[0]['off_time'] == 'empty':
-            res_text = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
-            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=format_display_date(target_date_str), schedule=res_text, updated=rows[0]['created_at'])
-        else:
-            # 3. Нормальний графік
-            # Використовуємо потрійні лапки для безпеки з емодзі та лапками словника
-            res_text = "\n".join([
-                f"""<tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {r['on_time']}""" 
-                for r in rows if r['off_time'] != 'empty'
-            ])
-            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=format_display_date(target_date_str), schedule=res_text, updated=rows[0]['created_at'])
 
-    # Кнопки навігації
-    if target_date_str == today_str:
+    # Единый стиль сообщения во всех состояниях
+    if not rows:
+        schedule_body = get_text(lang, 'no_schedule')
+        updated_at = "—"
+    elif rows[0]['off_time'] == 'empty':
+        schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
+        updated_at = format_display_datetime(rows[0]['created_at'])
+    else:
+        schedule_body = "\n".join(
+            [
+                f'<tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {r["on_time"]}'
+                for r in rows
+                if r['off_time'] != 'empty'
+            ]
+        )
+        updated_at = format_display_datetime(rows[0]['created_at'])
+
+    schedule_text = get_text(
+        lang,
+        'schedule_view',
+        company=comp,
+        queue=q,
+        date=display_date_str,
+        schedule=schedule_body,
+        updated=updated_at
+    )
+
+    # Кнопки навигации
+    if db_date_str == today_str:
         kb.add(types.InlineKeyboardButton(get_text(lang, 'tomorrow_label'), callback_data=cb_sched.new(comp=comp, queue=q, date=tomorrow_str), style="primary"))
     else:
         kb.add(types.InlineKeyboardButton(get_text(lang, 'today_label'), callback_data=cb_sched.new(comp=comp, queue=q, date=today_str), style="primary"))
@@ -1019,6 +1029,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
