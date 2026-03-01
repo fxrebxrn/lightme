@@ -426,7 +426,7 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         return
 
     # Формат вывода: строки с эмодзи
-    lines = [f'<tg-emoji emoji-id="5262602219240326742">🤩</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5262602219240326742">🤩</tg-emoji> {format_minutes(e)}' for s, e in common]
+    lines = [f'<tg-emoji emoji-id="5269671121229224375">🔵</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5269671121229224375">🔵</tg-emoji> {format_minutes(e)}' for s, e in common]
     header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=date_str)
     text = f"{header}\n\n" + "\n".join(lines)
 
@@ -505,7 +505,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         for s, e in ons:
             is_common = any(not (e <= cs or s >= ce) for cs, ce in common_intervals)
             prefix = "" if is_common else ""
-            lines.append(f'{prefix}<tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> {format_minutes(e)}')
+            lines.append(f'{prefix}<tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {format_minutes(e)}')
     
         if not lines:
             return get_text(lang, 'no_schedule_short')
@@ -691,7 +691,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
             # 3. Нормальний графік
             # Використовуємо потрійні лапки для безпеки з емодзі та лапками словника
             res_text = "\n".join([
-                f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
+                f"""<tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {r['on_time']}""" 
                 for r in rows if r['off_time'] != 'empty'
             ])
             schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated=rows[0]['created_at'])
@@ -1005,5 +1005,6 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
