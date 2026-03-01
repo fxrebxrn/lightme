@@ -12,6 +12,20 @@ COMPARE_STATE = {}
 # Часовой пояс Киева
 UA_TZ = pytz.timezone('Europe/Kyiv')
 
+def format_display_date(date_str: str):
+    """Перетворює дату з YYYY-MM-DD у DD.MM.YYYY для показу користувачу."""
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
+    except Exception:
+        return date_str
+
+def format_display_datetime(dt_str: str):
+    """Перетворює datetime з YYYY-MM-DD HH:MM:SS у DD.MM.YYYY HH:MM:SS."""
+    try:
+        return datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y %H:%M:%S')
+    except Exception:
+        return dt_str
+
 # CallbackData
 cb_lang = CallbackData("lang", "code")
 cb_menu = CallbackData("menu", "action", "val")
@@ -393,7 +407,7 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
             kb.add(types.InlineKeyboardButton(get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today", style="primary"))
         # всегда добавляем кнопку возврата в меню сравнения
         kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-        await call.message.edit_text(get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=date_str), reply_markup=kb)
+        await call.message.edit_text(get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)), reply_markup=kb)
         return
 
     def build_offs(rows):
@@ -422,12 +436,12 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
 
     if not common:
         kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-        await call.message.edit_text(get_text(lang, 'cmp_no_common', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=date_str), reply_markup=kb)
+        await call.message.edit_text(get_text(lang, 'cmp_no_common', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)), reply_markup=kb)
         return
 
     # Формат вывода: строки с эмодзи
     lines = [f'<tg-emoji emoji-id="5269671121229224375">🔵</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5269671121229224375">🔵</tg-emoji> {format_minutes(e)}' for s, e in common]
-    header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=date_str)
+    header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
     text = f"{header}\n\n" + "\n".join(lines)
 
     kb = types.InlineKeyboardMarkup(row_width=2)
@@ -459,7 +473,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
 
     if not rows1 or not rows2:
         kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}", style="danger"))
-        await call.message.edit_text(get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=date_str), reply_markup=kb)
+        await call.message.edit_text(get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)), reply_markup=kb)
         return
 
     def build_ons(rows):
@@ -515,7 +529,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     left = mark_ons(rows1, common, lang)
     right = mark_ons(rows2, common, lang)
 
-    header = get_text(lang, 'cmp_details_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=date_str)
+    header = get_text(lang, 'cmp_details_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
     text = f"{header}\n\n{get_text(lang, 'cmp_original_1', comp=comp1, queue=q1)}\n{left}\n\n{get_text(lang, 'cmp_original_2', comp=comp2, queue=q2)}\n{right}"
 
     kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}", style="danger"))
@@ -567,7 +581,7 @@ def queues_kb(action_type, company, lang):
 
 # --- Обработчики ---
 async def check_time_cmd(message: types.Message):
-    now = datetime.now(UA_TZ).strftime('%Y-%m-%d %H:%M:%S')
+    now = datetime.now(UA_TZ).strftime('%d.%m.%Y %H:%M:%S')
     await message.answer(f"Server time (Europe/Kyiv): {now}")
 
 async def start_cmd(message: types.Message):
@@ -681,12 +695,12 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     if not rows:
         res_text = get_text(lang, 'no_schedule')
         # Передаємо "-" замість часу оновлення, бо даних у базі немає
-        schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated="—")
+        schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=format_display_date(target_date_str), schedule=res_text, updated="—")
     else:
         # 2. Якщо є маркер 'empty' (відключень немає)
         if rows[0]['off_time'] == 'empty':
             res_text = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
-            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated=rows[0]['created_at'])
+            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=format_display_date(target_date_str), schedule=res_text, updated=rows[0]['created_at'])
         else:
             # 3. Нормальний графік
             # Використовуємо потрійні лапки для безпеки з емодзі та лапками словника
@@ -694,7 +708,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
                 f"""<tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {r['on_time']}""" 
                 for r in rows if r['off_time'] != 'empty'
             ])
-            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated=rows[0]['created_at'])
+            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=format_display_date(target_date_str), schedule=res_text, updated=rows[0]['created_at'])
 
     # Кнопки навігації
     if target_date_str == today_str:
@@ -1005,6 +1019,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
