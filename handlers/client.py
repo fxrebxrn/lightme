@@ -677,8 +677,8 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     lang = get_user_lang(call.from_user.id)
     
     now_ua = datetime.now(UA_TZ)
-    today_str = now_ua.strftime('%Y-%m-%d')
-    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%Y-%m-%d')
+    today_str = now_ua.strftime('%d.%m.%Y')
+    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%d.%m.%Y')
     
     if not target_date_str:
         target_date_str = today_str
@@ -686,7 +686,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     with get_db() as conn:
         rows = conn.execute(
             "SELECT off_time, on_time, created_at FROM schedules WHERE company=? AND queue=? AND date=?", 
-            (comp, q, target_date_str)
+            (comp, q, format_display_date(target_date_str))
         ).fetchall()
 
     kb = types.InlineKeyboardMarkup(row_width=1)
@@ -1019,6 +1019,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
