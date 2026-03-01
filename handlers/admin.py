@@ -11,7 +11,14 @@ import os
 import tempfile
 import sqlite3
 import shutil
+from datetime import datetime
 
+def format_display_date(date_str: str):
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
+    except Exception:
+        return date_str
+        
 async def download_db(message: types.Message):
     if message.from_user.id != config.ADMIN_ID:
         return
@@ -234,7 +241,7 @@ async def notify_users_about_update(bot, company, date_str, results):
 
             for user in users:
                 lang = user['language'] or 'uk'
-                header = get_text(lang, 'update_notify', company=company, queue=queue, date=date_str)
+                header = get_text(lang, 'update_notify', company=company, queue=queue, date=format_display_date(date_str))
                 
                 if is_no_outages:
                     status_msg = get_text(lang, 'no_outages') 
@@ -308,7 +315,7 @@ async def upload_schedule(message: types.Message, scheduler):
             changed_queues.add(q)
             
     if not changed_queues and old_queues:
-        return await message.answer(f"✅ Графік {company} на {date_str} <b>не змінився</b>. Розсилку скасовано.", parse_mode="HTML")
+        return await message.answer(f"✅ Графік {company} на {format_display_date(date_str)} <b>не змінився</b>. Розсилку скасовано.", parse_mode="HTML")
 
     with get_db() as conn:
         conn.execute("DELETE FROM schedules WHERE company = ? AND date = ?", (company, date_str))
@@ -351,7 +358,7 @@ async def upload_schedule(message: types.Message, scheduler):
             full_text_blocks.append(block)
 
     full_schedules_text = "\n\n".join(full_text_blocks)
-    await message.answer(f"✅ {company} ({date_str}) завантажено!\nРозіслано сповіщень для {len(changed_queues)} черг.\n\n{full_schedules_text}")
+    await message.answer(f"✅ {company} ({format_display_date(date_str)}) завантажено!\nРозіслано сповіщень для {len(changed_queues)} черг.\n\n{full_schedules_text}")
 
 def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(cmd_tech_on, commands=['techon'])
@@ -361,6 +368,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
