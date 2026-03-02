@@ -56,7 +56,7 @@ TEXTS = {
         'btn_compare_new': '➕ Нове порівняння',
         'btn_compare_my': '📚 Мої порівняння',
         'status_choose_queue': '<tg-emoji emoji-id="5257963315258204021">🏘</tg-emoji> Оберіть чергу для перегляду статусу:',
-        'status_title': '<b>Статус по {company} {queue}:</b>',
+        'status_title': '<tg-emoji emoji-id="5891211339170326418">⌛️</tg-emoji> <b>Статус по {company} {queue}:</b>',
         'status_now_on': '<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>ЗАРАЗ СВІТЛО Є</b>',
         'status_now_off': '<tg-emoji emoji-id="5280474686260527507">🔴</tg-emoji> <b>ЗАРАЗ СВІТЛА НЕМАЄ</b>',
         'status_to_off': '<tg-emoji emoji-id="5258258882022612173">⏲</tg-emoji> <b>До вимкнення:</b> {duration} (о {time})',
@@ -66,7 +66,7 @@ TEXTS = {
         'status_no_data': '<tg-emoji emoji-id="5879813604068298387">❗️</tg-emoji> Немає актуального графіка для цієї черги.',
         'status_refresh': '🔄 Оновити',
         'status_back': '⬅️ Назад',
-        'status_monitoring': '<a href="https://t.me/lightmeuaBot"><tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> Моніторинг графіків</a>',
+        'status_monitoring': '<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Моніторинг графіків</a>',
         'status_hours_short': 'год.',
         'status_minutes_short': 'хв.',
         'status_less_minute': '< 1 хв.',
@@ -154,7 +154,7 @@ TEXTS = {
         'btn_compare_new': '➕ Новое сравнение',
         'btn_compare_my': '📚 Мои сравнения',
         'status_choose_queue': '<tg-emoji emoji-id="5257963315258204021">🏘</tg-emoji> Выберите очередь для просмотра статуса:',
-        'status_title': '<b>Статус по {company} {queue}:</b>',
+        'status_title': '<tg-emoji emoji-id="5891211339170326418">⌛️</tg-emoji> <b>Статус по {company} {queue}:</b>',
         'status_now_on': '<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>СЕЙЧАС СВЕТ ЕСТЬ</b>',
         'status_now_off': '<tg-emoji emoji-id="5280474686260527507">🔴</tg-emoji> <b>СЕЙЧАС СВЕТА НЕТ</b>',
         'status_to_off': '<tg-emoji emoji-id="5258258882022612173">⏲</tg-emoji> До отключения: {duration} (в {time})',
@@ -164,7 +164,7 @@ TEXTS = {
         'status_no_data': '<tg-emoji emoji-id="5879813604068298387">❗️</tg-emoji> Нет актуального графика для этой очереди.',
         'status_refresh': '🔄 Обновить',
         'status_back': '⬅️ Назад',
-        'status_monitoring': '<a href="https://t.me/lightmeuaBot"><tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> Мониторинг графиков</a>',
+        'status_monitoring': '<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Мониторинг графиков</a>',
         'status_hours_short': 'ч.',
         'status_minutes_short': 'мин.',
         'status_less_minute': '< 1 мин.',
@@ -200,6 +200,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
