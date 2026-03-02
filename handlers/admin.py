@@ -228,7 +228,7 @@ async def notify_users_about_update(bot, company, date_str, results):
                     off = it.get('off_time', '').strip()
                     on = it.get('on_time', '').strip()
                     if off and on and off not in ['-', 'empty']:
-                        schedule_lines.append(f'<tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {off} - <tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {on}')
+                        schedule_lines.append(f'<tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {off} - <tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {on}')
 
             schedule_text = "\n".join(schedule_lines) if schedule_lines else ""
 
@@ -353,7 +353,7 @@ async def upload_schedule(message: types.Message, scheduler):
                 items_sorted = sorted(items, key=lambda x: x.get('off_time', ''))
             except Exception:
                 items_sorted = items
-            lines = [f"""<tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> {it.get('off_time','').strip()} - <tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> {it.get('on_time','').strip()}""" for it in items_sorted if it.get('off_time') and it.get('on_time') and it.get('off_time') not in ['-', 'empty']]
+            lines = [f"""<tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {it.get('off_time','').strip()} - <tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {it.get('on_time','').strip()}""" for it in items_sorted if it.get('off_time') and it.get('on_time') and it.get('off_time') not in ['-', 'empty']]
             block = f"{company} {q} {status_icon}:\n" + "\n".join(lines) if lines else f"{company} {q} {status_icon}: (порожній графік)"
             full_text_blocks.append(block)
 
@@ -368,6 +368,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
