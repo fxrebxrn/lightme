@@ -699,30 +699,22 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     # Единый стиль сообщения во всех состояниях
     if not rows:
-        schedule_body = get_text(lang, 'no_schedule')
-        updated_at = "—"
-    elif rows[0]['off_time'] == 'empty':
-        schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
-        updated_at = format_display_datetime(rows[0]['created_at'])
+        res_text = get_text(lang, 'no_schedule')
+        # Передаємо "-" замість часу оновлення, бо даних у базі немає
+        schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated="—")
     else:
-        schedule_body = "\n".join(
-            [
-                f'<tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {r["on_time"]}'
-                for r in rows
-                if r['off_time'] != 'empty'
-            ]
-        )
-        updated_at = format_display_datetime(rows[0]['created_at'])
-
-    schedule_text = get_text(
-        lang,
-        'schedule_view',
-        company=comp,
-        queue=q,
-        date=display_date_str,
-        schedule=schedule_body,
-        updated=updated_at
-    )
+        # 2. Якщо є маркер 'empty' (відключень немає)
+        if rows[0]['off_time'] == 'empty':
+            res_text = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
+            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated=rows[0]['created_at'])
+        else:
+            # 3. Нормальний графік
+            # Використовуємо потрійні лапки для безпеки з емодзі та лапками словника
+            res_text = "\n".join([
+                f"""<tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {r['on_time']}""" 
+                for r in rows if r['off_time'] != 'empty'
+            ])
+            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated=rows[0]['created_at'])
 
     # Кнопки навигации
     if db_date_str == today_str:
@@ -1108,6 +1100,84 @@ async def back_to_settings_from_notifications(call: types.CallbackQuery):
         await call.message.answer(get_text(lang, 'settings_text'), reply_markup=kb)
     await call.answer()
 
+async def inline_echo(inline_query: types.InlineQuery):
+    query_text = inline_query.query.strip().lower()
+    if not query_text:
+        return
+
+    # Розбиваємо запит на частини
+    parts = query_text.split()
+    if len(parts) < 2:
+        return
+
+    # Компанія та черга
+    company = parts[0].upper().replace('DTEK', 'ДТЕК')
+    queue = parts[1]
+    
+    # Визначаємо дати
+    now_ua = datetime.now(UA_TZ)
+    today_dt = now_ua
+    tomorrow_dt = now_ua + timedelta(days=1)
+    
+    today_db = today_dt.strftime('%Y-%m-%d')
+    tomorrow_db = tomorrow_dt.strftime('%Y-%m-%d')
+
+    # Логіка вибору дати
+    target_date_db = today_db
+    display_date = today_dt.strftime('%d.%m.%Y') # Формат 01.03.2026
+    day_label = "на сьогодні"
+    
+    # Перевірка на ключові слова
+    if any(word in query_text for word in ['завтра']):
+        target_date_db = tomorrow_db
+        display_date = tomorrow_dt.strftime('%d.%m.%Y')
+        day_label = "на завтра"
+    elif any(word in query_text for word in ['сегодня', 'сьогодні', 'сьогодня']):
+        target_date_db = today_db
+        display_date = today_dt.strftime('%d.%m.%Y')
+        day_label = "на сьогодні"
+
+    # Отримуємо дані з БД
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", 
+            (company, queue, target_date_db)
+        ).fetchall()
+
+    # Формуємо текст графіка
+    if not rows:
+        schedule_text = f"Графік на {display_date} не знайдений."
+    elif rows[0]['off_time'] == 'empty':
+        schedule_text = f"✅ <b>На {display_date} відключень не планується!</b> 🎉"
+    else:
+        # Використовуємо твої преміум-емодзі
+        lines = [
+            f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
+            for r in rows
+        ]
+        schedule_text = f"<b>Графік на {display_date}:</b>\n" + "\n".join(lines)
+
+    # Фінальний текст повідомлення (зі зміненою датою)
+    result_text = (
+        f"<b>📅 {company} | Черга {queue}</b>\n\n"
+        f"{schedule_text}\n\n"
+        f"💡 <a href='https://t.me/lightmeuaBot'>Моніторінг графіків</a>"
+    )
+
+    # Картка результату
+    item = types.InlineQueryResultArticle(
+        id=str(uuid.uuid4()),
+        title=f"Графік {company} {queue} ({day_label})", # Тут залишається "на завтра/на сьогодні"
+        description=f"Переглянути графік на {display_date}",
+        input_message_content=types.InputTextMessageContent(
+            message_text=result_text,
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
+    )
+
+    await inline_query.answer(results=[item], cache_time=60)
+
 # --- Реєстрація ---
 def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили scheduler
     dp.register_message_handler(compare_menu, lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare'))
@@ -1171,3 +1241,4 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(settings_cmd, commands=['settings'])
     dp.register_message_handler(compare_menu, commands=['compare'])
     dp.register_message_handler(status_cmd, commands=['status'])
+
