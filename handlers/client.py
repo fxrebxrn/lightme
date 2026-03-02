@@ -1,6 +1,5 @@
 from aiogram import Dispatcher, types
 from aiogram.utils.callback_data import CallbackData
-from aiogram.utils.exceptions import MessageNotModified
 from database.db import get_db, get_user_settings, set_user_setting
 import config
 from locales.strings import get_text
@@ -8,6 +7,7 @@ from services.scheduler import parse_localized_datetime
 from datetime import datetime, timedelta
 import pytz
 import sqlite3
+import uuid
 
 COMPARE_STATE = {}
 # Часовой пояс Киева
@@ -443,7 +443,7 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         return
 
     # Формат вывода: строки с эмодзи
-    lines = [f'<tg-emoji emoji-id="5262602219240326742">🤩</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5262602219240326742">🤩</tg-emoji> {format_minutes(e)}' for s, e in common]
+    lines = [f'<tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {format_minutes(e)}' for s, e in common]
     header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
     text = f"{header}\n\n" + "\n".join(lines)
 
@@ -522,7 +522,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         for s, e in ons:
             is_common = any(not (e <= cs or s >= ce) for cs, ce in common_intervals)
             prefix = "" if is_common else ""
-            lines.append(f'{prefix}<tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> {format_minutes(e)}')
+            lines.append(f'{prefix}<tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {format_minutes(e)}')
     
         if not lines:
             return get_text(lang, 'no_schedule_short')
@@ -699,22 +699,30 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     # Единый стиль сообщения во всех состояниях
     if not rows:
-        res_text = get_text(lang, 'no_schedule')
-        # Передаємо "-" замість часу оновлення, бо даних у базі немає
-        schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated="—")
+        schedule_body = get_text(lang, 'no_schedule')
+        updated_at = "—"
+    elif rows[0]['off_time'] == 'empty':
+        schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
+        updated_at = format_display_datetime(rows[0]['created_at'])
     else:
-        # 2. Якщо є маркер 'empty' (відключень немає)
-        if rows[0]['off_time'] == 'empty':
-            res_text = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
-            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated=rows[0]['created_at'])
-        else:
-            # 3. Нормальний графік
-            # Використовуємо потрійні лапки для безпеки з емодзі та лапками словника
-            res_text = "\n".join([
-                f"""<tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {r['on_time']}""" 
-                for r in rows if r['off_time'] != 'empty'
-            ])
-            schedule_text = get_text(lang, 'schedule_view', company=comp, queue=q, date=target_date_str, schedule=res_text, updated=rows[0]['created_at'])
+        schedule_body = "\n".join(
+            [
+                f'<tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {r["on_time"]}'
+                for r in rows
+                if r['off_time'] != 'empty'
+            ]
+        )
+        updated_at = format_display_datetime(rows[0]['created_at'])
+
+    schedule_text = get_text(
+        lang,
+        'schedule_view',
+        company=comp,
+        queue=q,
+        date=display_date_str,
+        schedule=schedule_body,
+        updated=updated_at
+    )
 
     # Кнопки навигации
     if db_date_str == today_str:
@@ -732,24 +740,6 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
         else:
             await call.answer()
     await call.answer()
-
-
-def _format_status_duration(delta: timedelta, lang: str):
-    total_minutes = max(0, int(delta.total_seconds() // 60))
-    hours = total_minutes // 60
-    mins = total_minutes % 60
-
-    parts = []
-    if hours > 0:
-        parts.append(f"{hours} {get_text(lang, 'status_hours_short')}")
-    if mins > 0:
-        parts.append(f"{mins} {get_text(lang, 'status_minutes_short')}")
-
-    if not parts:
-        return get_text(lang, 'status_less_minute')
-
-    return " ".join(parts)
-
 
 def _get_status_snapshot(company: str, queue: str):
     now_ua = datetime.now(UA_TZ)
@@ -825,7 +815,7 @@ def build_status_message(company: str, queue: str, lang: str):
     state_line = get_text(lang, 'status_now_on') if snapshot['state'] == 'on' else get_text(lang, 'status_now_off')
 
     if snapshot.get('next_event') is None:
-        return f"{title}\n\n{state_line}\n{get_text(lang, 'status_no_data')}\n\n{get_text(lang, 'status_monitoring')}"
+        return f"{title}\n\n{state_line}\n\n{get_text(lang, 'status_no_data')}\n\n{get_text(lang, 'status_monitoring')}"
 
     now_ua = datetime.now(UA_TZ)
     target = snapshot['target']
@@ -843,7 +833,7 @@ def build_status_message(company: str, queue: str, lang: str):
         countdown_line = get_text(lang, 'status_to_on', duration=duration, time=snapshot['on_time'].strftime('%H:%M'))
         event_line = get_text(lang, 'status_next_on', on_time=snapshot['on_time'].strftime('%H:%M'))
 
-    return f"{title}\n\n{state_line}\n{countdown_line}\n{event_line}\n\n{get_text(lang, 'status_monitoring')}"
+    return f"{title}\n\n{state_line}\n\n{countdown_line}\n\n{event_line}\n\n{get_text(lang, 'status_monitoring')}"
 
 
 def status_actions_kb(lang: str, company: str, queue: str):
@@ -933,20 +923,13 @@ async def status_callback(call: types.CallbackQuery, callback_data: dict):
     comp, queue = callback_data['comp'], callback_data['queue']
     text = build_status_message(comp, queue, lang)
 
-    try:
-        await call.message.edit_text(
-            text,
-            reply_markup=status_actions_kb(lang, comp, queue),
-            parse_mode='HTML',
-            disable_web_page_preview=True
-        )
-    except MessageNotModified:
-        # Якщо контент не змінився (часто при "Оновити" без нових даних),
-        # просто тихо закриваємо callback без падіння воркера.
-        pass
-
+    await call.message.edit_text(
+        text,
+        reply_markup=status_actions_kb(lang, comp, queue),
+        parse_mode='HTML',
+        disable_web_page_preview=True
+    )
     await call.answer()
-
 
 async def my_queues(message: types.Message):
     lang = get_user_lang(message.from_user.id)
@@ -1155,7 +1138,7 @@ async def inline_echo(inline_query: types.InlineQuery):
             f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
             for r in rows
         ]
-        schedule_text = f"<b>Графік на {display_date}:</b>\n" + "\n".join(lines)
+        schedule_text = f"<b>Графік на {display_date}:</b>\n\n" + "\n".join(lines)
 
     # Фінальний текст повідомлення (зі зміненою датою)
     result_text = (
@@ -1168,7 +1151,7 @@ async def inline_echo(inline_query: types.InlineQuery):
     item = types.InlineQueryResultArticle(
         id=str(uuid.uuid4()),
         title=f"Графік {company} {queue} ({day_label})", # Тут залишається "на завтра/на сьогодні"
-        description=f"Переглянути графік на {display_date}",
+        description=f"Натисніть, щоб відправити графік у чат",
         input_message_content=types.InputTextMessageContent(
             message_text=result_text,
             parse_mode="HTML",
@@ -1214,7 +1197,6 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(handle_comp_selection, lambda c: c.data and c.data.startswith(('vcomp_', 'scomp_')))
     dp.register_callback_query_handler(show_sched, cb_sched.filter())
-    dp.register_callback_query_handler(status_callback, cb_status.filter())
     
     async def _save_sub_wrapper(call: types.CallbackQuery, callback_data: dict):
         await save_sub(call, callback_data, scheduler)
@@ -1224,6 +1206,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(open_notifications, text="open_notifications")
     dp.register_callback_query_handler(toggle_notify, cb_notify.filter())
+    dp.register_callback_query_handler(status_callback, cb_status.filter())
     dp.register_callback_query_handler(toggle_all_notify, text="toggle_all")
     dp.register_callback_query_handler(back_to_settings_from_notifications, text="open_settings_back")
 
@@ -1241,4 +1224,11 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(settings_cmd, commands=['settings'])
     dp.register_message_handler(compare_menu, commands=['compare'])
     dp.register_message_handler(status_cmd, commands=['status'])
+  
+    dp.register_inline_handler(inline_echo)
+
+
+
+
+
 
