@@ -849,6 +849,12 @@ def build_status_message(company: str, queue: str, lang: str):
         countdown_line = get_text(lang, 'status_to_on', duration=duration, time=snapshot['on_time'].strftime('%H:%M'))
         event_line = get_text(lang, 'status_next_on', on_time=snapshot['on_time'].strftime('%H:%M'))
 
+    # Якщо подія відбудеться завтра, додаємо слово "завтра" перед "о" або "в"
+    if target.date() > now_ua.date():
+        word = "завтра" if lang == 'uk' else "завтра" # Можна замінити друге на "завтра", якщо є російська локалізація
+        event_line = event_line.replace(" о ", f" {word} о ").replace(" в ", f" {word} в ")
+        countdown_line = countdown_line.replace(" о ", f" {word} о ").replace(" в ", f" {word} в ")
+
     return f"{title}\n\n{state_line}\n\n{countdown_line}\n\n{event_line}\n\n{get_text(lang, 'status_monitoring')}"
 
 
@@ -1242,6 +1248,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
