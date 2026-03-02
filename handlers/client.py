@@ -1,5 +1,6 @@
 from aiogram import Dispatcher, types
 from aiogram.utils.callback_data import CallbackData
+from aiogram.utils.exceptions import MessageNotModified
 from database.db import get_db, get_user_settings, set_user_setting
 import config
 from locales.strings import get_text
@@ -832,7 +833,7 @@ def build_status_message(company: str, queue: str, lang: str):
     state_line = get_text(lang, 'status_now_on') if snapshot['state'] == 'on' else get_text(lang, 'status_now_off')
 
     if snapshot.get('next_event') is None:
-        return f"{title}\n\n{state_line}\n\n{get_text(lang, 'status_no_data')}\n\n{get_text(lang, 'status_monitoring')}"
+        return f"{title}\n\n{state_line}\n{get_text(lang, 'status_no_data')}\n\n{get_text(lang, 'status_monitoring')}"
 
     now_ua = datetime.now(UA_TZ)
     target = snapshot['target']
@@ -850,7 +851,7 @@ def build_status_message(company: str, queue: str, lang: str):
         countdown_line = get_text(lang, 'status_to_on', duration=duration, time=snapshot['on_time'].strftime('%H:%M'))
         event_line = get_text(lang, 'status_next_on', on_time=snapshot['on_time'].strftime('%H:%M'))
 
-    return f"{title}\n\n{state_line}\n\n{countdown_line}\n\n{event_line}\n\n{get_text(lang, 'status_monitoring')}"
+    return f"{title}\n\n{state_line}\n{countdown_line}\n{event_line}\n\n{get_text(lang, 'status_monitoring')}"
 
 
 def status_actions_kb(lang: str, company: str, queue: str):
@@ -940,12 +941,18 @@ async def status_callback(call: types.CallbackQuery, callback_data: dict):
     comp, queue = callback_data['comp'], callback_data['queue']
     text = build_status_message(comp, queue, lang)
 
-    await call.message.edit_text(
-        text,
-        reply_markup=status_actions_kb(lang, comp, queue),
-        parse_mode='HTML',
-        disable_web_page_preview=True
-    )
+    try:
+        await call.message.edit_text(
+            text,
+            reply_markup=status_actions_kb(lang, comp, queue),
+            parse_mode='HTML',
+            disable_web_page_preview=True
+        )
+    except MessageNotModified:
+        # Якщо контент не змінився (часто при "Оновити" без нових даних),
+        # просто тихо закриваємо callback без падіння воркера.
+        pass
+
     await call.answer()
 
 
