@@ -62,7 +62,7 @@ TEXTS = {
         'status_to_off': '<tg-emoji emoji-id="5258258882022612173">⏲</tg-emoji> <b>До вимкнення:</b> {duration} (о {time})',
         'status_to_on': '<tg-emoji emoji-id="5258258882022612173">⏲</tg-emoji> <b>До ввімкнення:</b> {duration} (о {time})',
         'status_next_off': '<tg-emoji emoji-id="5891100675042974129">📅</tg-emoji> <b>Наступна подія:</b> <tg-emoji emoji-id="5330017696660599813">🔲</tg-emoji> Відключення о {off_time} до {on_time}.',
-        'status_next_on': '<tg-emoji emoji-id="5891100675042974129">📅</tg-emoji> <b>Наступна подія:</b> <tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> Включення о {on_time} до {off_time}.',
+        'status_next_on': '<tg-emoji emoji-id="5891100675042974129">📅</tg-emoji> <b>Наступна подія:</b> <tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> Включення о {on_time} до.',
         'status_no_data': '<tg-emoji emoji-id="5879813604068298387">❗️</tg-emoji> <b>Немає актуального графіка для цієї черги.</b>',
         'status_refresh': '🔄 Оновити',
         'status_back': '⬅️ Назад',
@@ -160,7 +160,7 @@ TEXTS = {
         'status_to_off': '<tg-emoji emoji-id="5258258882022612173">⏲</tg-emoji> <b>До отключения:</b> {duration} (в {time})',
         'status_to_on': '<tg-emoji emoji-id="5258258882022612173">⏲</tg-emoji> <b>До включения:</b> {duration} (в {time})',
         'status_next_off': '<tg-emoji emoji-id="5891100675042974129">📅</tg-emoji> <b>Следующее событие:</b> <tg-emoji emoji-id="5330017696660599813">🔲</tg-emoji> Отключение в {off_time} до {on_time}.',
-        'status_next_on': '<tg-emoji emoji-id="5891100675042974129">📅</tg-emoji> <b>Следующее событие:</b> <tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> Включение в {on_time} до {off_time}.',
+        'status_next_on': '<tg-emoji emoji-id="5891100675042974129">📅</tg-emoji> <b>Следующее событие:</b> <tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> Включение в {on_time} до.',
         'status_no_data': '<tg-emoji emoji-id="5879813604068298387">❗️</tg-emoji> <b>Нет актуального графика для этой очереди.</b>',
         'status_refresh': '🔄 Обновить',
         'status_back': '⬅️ Назад',
@@ -200,6 +200,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
