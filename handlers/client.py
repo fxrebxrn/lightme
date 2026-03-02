@@ -3,10 +3,10 @@ from aiogram.utils.callback_data import CallbackData
 from database.db import get_db, get_user_settings, set_user_setting
 import config
 from locales.strings import get_text
+from services.scheduler import parse_localized_datetime
 from datetime import datetime, timedelta
 import pytz
 import sqlite3
-import uuid
 
 COMPARE_STATE = {}
 # Часовой пояс Киева
@@ -32,6 +32,7 @@ cb_menu = CallbackData("menu", "action", "val")
 # Обновлено: добавлен параметр date
 cb_sched = CallbackData("sched", "comp", "queue", "date") 
 cb_notify = CallbackData("notify", "key", "val")
+cb_status = CallbackData("status", "action", "comp", "queue")
 
 # --- Утилиты работы с сохранёнными сравнениями в БД ---
 def ensure_compares_table():
@@ -166,6 +167,7 @@ def main_menu_kb(lang):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(get_text(lang, 'btn_add_queue'), get_text(lang, 'btn_my_queues'))
     kb.row(get_text(lang, 'btn_schedules'), get_text(lang, 'btn_compare'))
+    kb.row(get_text(lang, 'btn_status'))
     kb.row(get_text(lang, 'btn_settings'), get_text(lang, 'btn_support'))
     return kb
 
@@ -440,7 +442,7 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         return
 
     # Формат вывода: строки с эмодзи
-    lines = [f'<tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {format_minutes(e)}' for s, e in common]
+    lines = [f'<tg-emoji emoji-id="5262602219240326742">🤩</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5262602219240326742">🤩</tg-emoji> {format_minutes(e)}' for s, e in common]
     header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
     text = f"{header}\n\n" + "\n".join(lines)
 
@@ -519,7 +521,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         for s, e in ons:
             is_common = any(not (e <= cs or s >= ce) for cs, ce in common_intervals)
             prefix = "" if is_common else ""
-            lines.append(f'{prefix}<tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {format_minutes(e)}')
+            lines.append(f'{prefix}<tg-emoji emoji-id="5262874597476309620">🤩</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5262779352281549858">🤩</tg-emoji> {format_minutes(e)}')
     
         if not lines:
             return get_text(lang, 'no_schedule_short')
@@ -557,6 +559,7 @@ def main_menu_kb(lang):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(get_text(lang, 'btn_add_queue'), get_text(lang, 'btn_my_queues'))
     kb.row(get_text(lang, 'btn_schedules'), get_text(lang, 'btn_compare'))
+    kb.row(get_text(lang, 'btn_status'))
     kb.row(get_text(lang, 'btn_settings'), get_text(lang, 'btn_support'))
     return kb
 
@@ -703,7 +706,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     else:
         schedule_body = "\n".join(
             [
-                f'<tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {r["on_time"]}'
+                f'<tg-emoji emoji-id="5269554834989685036">🔴</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5269617618821618815">🟢</tg-emoji> {r["on_time"]}'
                 for r in rows
                 if r['off_time'] != 'empty'
             ]
@@ -736,6 +739,215 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
         else:
             await call.answer()
     await call.answer()
+
+
+def _format_status_duration(delta: timedelta, lang: str):
+    total_minutes = max(0, int(delta.total_seconds() // 60))
+    hours = total_minutes // 60
+    mins = total_minutes % 60
+
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours} {get_text(lang, 'status_hours_short')}")
+    if mins > 0:
+        parts.append(f"{mins} {get_text(lang, 'status_minutes_short')}")
+
+    if not parts:
+        return get_text(lang, 'status_less_minute')
+
+    return " ".join(parts)
+
+
+def _get_status_snapshot(company: str, queue: str):
+    now_ua = datetime.now(UA_TZ)
+    today = now_ua.date()
+    tomorrow = today + timedelta(days=1)
+
+    with get_db() as conn:
+        rows_today = conn.execute(
+            "SELECT date, off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=? ORDER BY off_time ASC",
+            (company, queue, today.strftime('%Y-%m-%d'))
+        ).fetchall()
+        rows_tomorrow = conn.execute(
+            "SELECT date, off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=? ORDER BY off_time ASC",
+            (company, queue, tomorrow.strftime('%Y-%m-%d'))
+        ).fetchall()
+
+    if not rows_today and not rows_tomorrow:
+        return None
+
+    intervals = []
+    for row in list(rows_today) + list(rows_tomorrow):
+        if row['off_time'] == 'empty':
+            continue
+        try:
+            off_dt = parse_localized_datetime(row['date'], row['off_time'])
+            on_dt = parse_localized_datetime(row['date'], row['on_time'])
+        except Exception:
+            continue
+        intervals.append((off_dt, on_dt))
+
+    if not intervals:
+        return {'state': 'on', 'next_event': None}
+
+    intervals.sort(key=lambda item: item[0])
+
+    now_off_interval = None
+    next_off_interval = None
+    for off_dt, on_dt in intervals:
+        if off_dt <= now_ua < on_dt:
+            now_off_interval = (off_dt, on_dt)
+            break
+        if off_dt > now_ua and next_off_interval is None:
+            next_off_interval = (off_dt, on_dt)
+
+    if now_off_interval is not None:
+        return {
+            'state': 'off',
+            'next_event': 'on',
+            'target': now_off_interval[1],
+            'off_time': now_off_interval[0],
+            'on_time': now_off_interval[1],
+        }
+
+    if next_off_interval is not None:
+        return {
+            'state': 'on',
+            'next_event': 'off',
+            'target': next_off_interval[0],
+            'off_time': next_off_interval[0],
+            'on_time': next_off_interval[1],
+        }
+
+    return {'state': 'on', 'next_event': None}
+
+
+def build_status_message(company: str, queue: str, lang: str):
+    snapshot = _get_status_snapshot(company, queue)
+    title = get_text(lang, 'status_title', company=company, queue=queue)
+
+    if not snapshot:
+        return f"{title}\n\n{get_text(lang, 'status_no_data')}\n\n{get_text(lang, 'status_monitoring')}"
+
+    state_line = get_text(lang, 'status_now_on') if snapshot['state'] == 'on' else get_text(lang, 'status_now_off')
+
+    if snapshot.get('next_event') is None:
+        return f"{title}\n\n{state_line}\n\n{get_text(lang, 'status_no_data')}\n\n{get_text(lang, 'status_monitoring')}"
+
+    now_ua = datetime.now(UA_TZ)
+    target = snapshot['target']
+    duration = _format_status_duration(target - now_ua, lang)
+
+    if snapshot['next_event'] == 'off':
+        countdown_line = get_text(lang, 'status_to_off', duration=duration, time=snapshot['off_time'].strftime('%H:%M'))
+        event_line = get_text(
+            lang,
+            'status_next_off',
+            off_time=snapshot['off_time'].strftime('%H:%M'),
+            on_time=snapshot['on_time'].strftime('%H:%M')
+        )
+    else:
+        countdown_line = get_text(lang, 'status_to_on', duration=duration, time=snapshot['on_time'].strftime('%H:%M'))
+        event_line = get_text(lang, 'status_next_on', on_time=snapshot['on_time'].strftime('%H:%M'))
+
+    return f"{title}\n\n{state_line}\n\n{countdown_line}\n\n{event_line}\n\n{get_text(lang, 'status_monitoring')}"
+
+
+def status_actions_kb(lang: str, company: str, queue: str):
+    kb = types.InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        types.InlineKeyboardButton(
+            get_text(lang, 'status_refresh'),
+            callback_data=cb_status.new(action='refresh', comp=company, queue=queue),
+            style='primary'
+        ),
+        types.InlineKeyboardButton(
+            get_text(lang, 'status_back'),
+            callback_data=cb_status.new(action='back', comp=company, queue=queue),
+            style='danger'
+        )
+    )
+    return kb
+
+
+async def status_cmd(message: types.Message):
+    lang = get_user_lang(message.from_user.id)
+
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT company, queue FROM users WHERE user_id=? ORDER BY company, queue",
+            (message.from_user.id,)
+        ).fetchall()
+
+    if not rows:
+        await message.answer(get_text(lang, 'empty_list'))
+        return
+
+    if len(rows) == 1:
+        comp, queue = rows[0]['company'], rows[0]['queue']
+        text = build_status_message(comp, queue, lang)
+        await message.answer(
+            text,
+            reply_markup=status_actions_kb(lang, comp, queue),
+            parse_mode='HTML',
+            disable_web_page_preview=True
+        )
+        return
+
+    kb = types.InlineKeyboardMarkup(row_width=2)
+    for row in rows:
+        comp, queue = row['company'], row['queue']
+        kb.add(
+            types.InlineKeyboardButton(
+                f"{comp} {queue}",
+                callback_data=cb_status.new(action='show', comp=comp, queue=queue),
+                style='primary'
+            )
+        )
+
+    await message.answer(get_text(lang, 'status_choose_queue'), reply_markup=kb)
+
+
+async def status_callback(call: types.CallbackQuery, callback_data: dict):
+    lang = get_user_lang(call.from_user.id)
+    action = callback_data['action']
+
+    if action == 'back':
+        with get_db() as conn:
+            rows = conn.execute(
+                "SELECT DISTINCT company, queue FROM users WHERE user_id=? ORDER BY company, queue",
+                (call.from_user.id,)
+            ).fetchall()
+
+        if len(rows) <= 1:
+            await call.message.answer(get_text(lang, 'menu_main'), reply_markup=main_menu_kb(lang))
+            await call.answer()
+            return
+
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        for row in rows:
+            comp, queue = row['company'], row['queue']
+            kb.add(types.InlineKeyboardButton(
+                f"{comp} {queue}",
+                callback_data=cb_status.new(action='show', comp=comp, queue=queue),
+                style='primary'
+            ))
+
+        await call.message.edit_text(get_text(lang, 'status_choose_queue'), reply_markup=kb)
+        await call.answer()
+        return
+
+    comp, queue = callback_data['comp'], callback_data['queue']
+    text = build_status_message(comp, queue, lang)
+
+    await call.message.edit_text(
+        text,
+        reply_markup=status_actions_kb(lang, comp, queue),
+        parse_mode='HTML',
+        disable_web_page_preview=True
+    )
+    await call.answer()
+
 
 async def my_queues(message: types.Message):
     lang = get_user_lang(message.from_user.id)
@@ -889,84 +1101,6 @@ async def back_to_settings_from_notifications(call: types.CallbackQuery):
         await call.message.answer(get_text(lang, 'settings_text'), reply_markup=kb)
     await call.answer()
 
-async def inline_echo(inline_query: types.InlineQuery):
-    query_text = inline_query.query.strip().lower()
-    if not query_text:
-        return
-
-    # Розбиваємо запит на частини
-    parts = query_text.split()
-    if len(parts) < 2:
-        return
-
-    # Компанія та черга
-    company = parts[0].upper().replace('DTEK', 'ДТЕК')
-    queue = parts[1]
-    
-    # Визначаємо дати
-    now_ua = datetime.now(UA_TZ)
-    today_dt = now_ua
-    tomorrow_dt = now_ua + timedelta(days=1)
-    
-    today_db = today_dt.strftime('%Y-%m-%d')
-    tomorrow_db = tomorrow_dt.strftime('%Y-%m-%d')
-
-    # Логіка вибору дати
-    target_date_db = today_db
-    display_date = today_dt.strftime('%d.%m.%Y') # Формат 01.03.2026
-    day_label = "на сьогодні"
-    
-    # Перевірка на ключові слова
-    if any(word in query_text for word in ['завтра']):
-        target_date_db = tomorrow_db
-        display_date = tomorrow_dt.strftime('%d.%m.%Y')
-        day_label = "на завтра"
-    elif any(word in query_text for word in ['сегодня', 'сьогодні', 'сьогодня']):
-        target_date_db = today_db
-        display_date = today_dt.strftime('%d.%m.%Y')
-        day_label = "на сьогодні"
-
-    # Отримуємо дані з БД
-    with get_db() as conn:
-        rows = conn.execute(
-            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", 
-            (company, queue, target_date_db)
-        ).fetchall()
-
-    # Формуємо текст графіка
-    if not rows:
-        schedule_text = f"Графік на {display_date} не знайдений."
-    elif rows[0]['off_time'] == 'empty':
-        schedule_text = f"✅ <b>На {display_date} відключень не планується!</b> 🎉"
-    else:
-        # Використовуємо твої преміум-емодзі
-        lines = [
-            f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
-            for r in rows
-        ]
-        schedule_text = f"<b>Графік на {display_date}:</b>\n\n" + "\n".join(lines)
-
-    # Фінальний текст повідомлення (зі зміненою датою)
-    result_text = (
-        f"<b>📅 {company} | Черга {queue}</b>\n\n"
-        f"{schedule_text}\n\n"
-        f"💡 <a href='https://t.me/lightmeuaBot'>Моніторінг графіків</a>"
-    )
-
-    # Картка результату
-    item = types.InlineQueryResultArticle(
-        id=str(uuid.uuid4()),
-        title=f"Графік {company} {queue} ({day_label})", # Тут залишається "на завтра/на сьогодні"
-        description=f"Натисніть, щоб відправити графік у чат",
-        input_message_content=types.InputTextMessageContent(
-            message_text=result_text,
-            parse_mode="HTML",
-            disable_web_page_preview=True
-        )
-    )
-
-    await inline_query.answer(results=[item], cache_time=60)
-
 # --- Реєстрація ---
 def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили scheduler
     dp.register_message_handler(compare_menu, lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare'))
@@ -994,6 +1128,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(view_schedules_start, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["графік", "график"]))
     dp.register_message_handler(add_queue_btn, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["додати", "добавить"]))
     dp.register_message_handler(my_queues, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["мої чер", "мои оче"]))
+    dp.register_message_handler(status_cmd, lambda m: bool(m.text) and m.text in (get_text('uk', 'btn_status'), get_text('ru', 'btn_status')))
 
     support_labels = (get_text('uk', 'btn_support'), get_text('ru', 'btn_support'))
     settings_labels = (get_text('uk', 'btn_settings'), get_text('ru', 'btn_settings'))
@@ -1002,6 +1137,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(handle_comp_selection, lambda c: c.data and c.data.startswith(('vcomp_', 'scomp_')))
     dp.register_callback_query_handler(show_sched, cb_sched.filter())
+    dp.register_callback_query_handler(status_callback, cb_status.filter())
     
     async def _save_sub_wrapper(call: types.CallbackQuery, callback_data: dict):
         await save_sub(call, callback_data, scheduler)
@@ -1027,12 +1163,4 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(support_cmd, commands=['support'])
     dp.register_message_handler(settings_cmd, commands=['settings'])
     dp.register_message_handler(compare_menu, commands=['compare'])
-  
-    dp.register_inline_handler(inline_echo)
-
-
-
-
-
-
-
+    dp.register_message_handler(status_cmd, commands=['status'])
