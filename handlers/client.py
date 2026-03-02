@@ -741,6 +741,22 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
             await call.answer()
     await call.answer()
 
+def _format_status_duration(delta: timedelta, lang: str):
+    total_minutes = max(0, int(delta.total_seconds() // 60))
+    hours = total_minutes // 60
+    mins = total_minutes % 60
+
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours} {get_text(lang, 'status_hours_short')}")
+    if mins > 0:
+        parts.append(f"{mins} {get_text(lang, 'status_minutes_short')}")
+
+    if not parts:
+        return get_text(lang, 'status_less_minute')
+
+    return " ".join(parts)
+
 def _get_status_snapshot(company: str, queue: str):
     now_ua = datetime.now(UA_TZ)
     today = now_ua.date()
@@ -1226,6 +1242,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
