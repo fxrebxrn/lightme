@@ -66,10 +66,10 @@ TEXTS = {
         'status_no_data': '<tg-emoji emoji-id="5879813604068298387">❗️</tg-emoji> Немає актуального графіка для цієї черги.',
         'status_refresh': '🔄 Оновити',
         'status_back': '⬅️ Назад',
-        'status_monitoring': '💡 Моніторинг графіків (<a href="https://t.me/lightmeuaBot">https://t.me/lightmeuaBot</a>)',
-        'status_hours_short': 'год',
-        'status_minutes_short': 'хв',
-        'status_less_minute': '< 1 хв',
+        'status_monitoring': '<a href="https://t.me/lightmeuaBot"><tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> Моніторинг графіків</a>',
+        'status_hours_short': 'год.',
+        'status_minutes_short': 'хв.',
+        'status_less_minute': '< 1 хв.',
         'cmp_menu_text': '<tg-emoji emoji-id="5843553939672274145">⚡️</tg-emoji> Оберіть дію для порівняння черг:',
         'cmp_choose_first': '<tg-emoji emoji-id="5382322671679708881">1️⃣</tg-emoji> Оберіть першу компанію для порівняння:',
         'cmp_choose_second': '<tg-emoji emoji-id="5381990043642502553">2️⃣</tg-emoji> Оберіть другу компанію для порівняння:',
@@ -164,10 +164,10 @@ TEXTS = {
         'status_no_data': '<tg-emoji emoji-id="5879813604068298387">❗️</tg-emoji> Нет актуального графика для этой очереди.',
         'status_refresh': '🔄 Обновить',
         'status_back': '⬅️ Назад',
-        'status_monitoring': '💡 Мониторинг графиков (<a href="https://t.me/lightmeuaBot">https://t.me/lightmeuaBot</a>)',
-        'status_hours_short': 'ч',
-        'status_minutes_short': 'мин',
-        'status_less_minute': '< 1 мин',
+        'status_monitoring': '<a href="https://t.me/lightmeuaBot"><tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> Мониторинг графиков</a>',
+        'status_hours_short': 'ч.',
+        'status_minutes_short': 'мин.',
+        'status_less_minute': '< 1 мин.',
         'cmp_menu_text': '<tg-emoji emoji-id="5843553939672274145">⚡️</tg-emoji> Выберите действие для сравнения очередей:',
         'cmp_choose_first': '<tg-emoji emoji-id="5382322671679708881">1️⃣</tg-emoji> Выберите первую компанию для сравнения:',
         'cmp_choose_second': '<tg-emoji emoji-id="5381990043642502553">2️⃣</tg-emoji> Выберите вторую компанию для сравнения:',
@@ -200,6 +200,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
