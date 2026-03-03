@@ -705,6 +705,9 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     # Единый стиль сообщения во всех состояниях
     if not rows:
         schedule_body = get_text(lang, 'no_schedule')
+        updated_at = "—"
+        total_light = "—"
+        total_no_light = "—"
     elif rows[0]['off_time'] == 'empty':
         schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
         updated_at = format_display_datetime(rows[0]['created_at'])
@@ -733,17 +736,27 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     updated_at = updated_at.replace(' ', ' о ', 1) if updated_at != '—' else updated_at
 
-    schedule_text = get_text(
-        lang,
-        'schedule_view',
-        company=comp,
-        queue=q,
-        date=display_date_str,
-        schedule=schedule_body,
-        updated=updated_at,
-        total_light=total_light,
-        total_no_light=total_no_light
-    )
+    if not rows:
+        schedule_text = get_text(
+            lang,
+            'schedule_view_no_data',
+            company=comp,
+            queue=q,
+            date=display_date_str,
+            schedule=schedule_body,
+        )
+    else:
+        schedule_text = get_text(
+            lang,
+            'schedule_view',
+            company=comp,
+            queue=q,
+            date=display_date_str,
+            schedule=schedule_body,
+            updated=updated_at,
+            total_light=total_light,
+            total_no_light=total_no_light
+        )
 
     # Кнопки навигации
     if db_date_str == today_str:
@@ -761,7 +774,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
         else:
             await call.answer()
     await call.answer()
-
+    
 def _format_status_duration(delta: timedelta, lang: str):
     total_minutes = max(0, int(delta.total_seconds() // 60))
     hours = total_minutes // 60
@@ -1269,6 +1282,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
