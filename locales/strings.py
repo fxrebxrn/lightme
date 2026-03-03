@@ -15,7 +15,7 @@ TEXTS = {
         'btn_settings': '⚙️ Налаштування',
         'choose_comp': '<tg-emoji emoji-id="5967816500415827773">💻</tg-emoji> Оберіть компанію:',
         'choose_queue': '<tg-emoji emoji-id="5257963315258204021">🏘</tg-emoji> Оберіть чергу для <b>{company}</b>:',
-        'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}\n\n<i>Оновлено: {updated}</i>',
+        'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}\n\n<tg-emoji emoji-id="5258216851472654189">💡</tg-emoji> <b>Зі світлом:</b> {total_light}\n<tg-emoji emoji-id="5258216851472654189">💡</tg-emoji> <b>Без світла:</b> {total_no_light}\n\n<i>Оновлено: {updated}</i>\n\n<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монітор світла</a>',
         'no_schedule': '❗️ На жаль, графік для цієї черги на обрану дату ще не завантажено.',
         'back': '⬅️ Назад',
         'limit_error': '❗️ Максимум 5 черг! Видаліть щось.',
@@ -96,6 +96,7 @@ TEXTS = {
         'cmp_no_data': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> На жаль, графік на черги ще не завантажено.',
         'cmp_limit_reached': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Ви досягли ліміту збережених порівнянь 5/5. Видаліть старі, щоб зберегти нову.',
         'no_outages': 'Світло не вимикатимуть! <tg-emoji emoji-id="5208541126583136130">🎉</tg-emoji>',
+        'schedule_hours_value': '{value} год.',
     },
     'ru': {
         'select_lang': '<tg-emoji emoji-id="5449408995691341691">🇷🇺</tg-emoji> Пожалуйста, выберите язык:',
@@ -113,7 +114,7 @@ TEXTS = {
         'btn_settings': '⚙️ Настройки',
         'choose_comp': '<tg-emoji emoji-id="5967816500415827773">💻</tg-emoji> Выберите компанию:',
         'choose_queue': '<tg-emoji emoji-id="5257963315258204021">🏘</tg-emoji> Выберите очередь для <b>{company}</b>:',
-        'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}\n\n<i>Обновлено: {updated}</i>',
+        'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}\n\n<tg-emoji emoji-id="5258216851472654189">💡</tg-emoji> <b>Со светом:</b> {total_light}\n<tg-emoji emoji-id="5258216851472654189">💡</tg-emoji> <b>Без света:</b> {total_no_light}\n\n<i>Обновлено: {updated}</i>\n\n<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монитор света</a>',
         'no_schedule': '❗️ К сожалению, график для этой очереди на выбранную дату еще не загружен.',
         'back': '⬅️ Назад',
         'limit_error': '❗️ Максимум 5 очередей! Удалите что-то.',
@@ -194,12 +195,14 @@ TEXTS = {
         'cmp_no_data': '<tg-emoji emoji-id="5258503720928288433">ℹ️</tg-emoji> К сожелению, график на очереди еще не загружен.',
         'cmp_limit_reached': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Вы достигли лимита сохранённых сравнений 5/5. Удалите старые, чтобы сохранить новое.',
         'no_outages': 'Отключений не будет! <tg-emoji emoji-id="5208541126583136130">🎉</tg-emoji>',
+        'schedule_hours_value': '{value} ч.',
     }
 }
 
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
