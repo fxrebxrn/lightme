@@ -112,6 +112,11 @@ def format_minutes(m):
     mm = m % 60
     return f"{hh:02d}:{mm:02d}"
 
+def _format_hours_decimal(minutes: int):
+    hours = minutes / 60
+    if hours.is_integer():
+        return str(int(hours))
+    return f"{hours:.1f}".rstrip('0').rstrip('.')
 
 def merge_intervals(intervals):
     if not intervals:
@@ -701,18 +706,35 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     if not rows:
         schedule_body = get_text(lang, 'no_schedule')
         updated_at = "—"
+        total_light = "—"
+        total_no_light = "—"
     elif rows[0]['off_time'] == 'empty':
         schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
         updated_at = format_display_datetime(rows[0]['created_at'])
+        total_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(24 * 60))
+        total_no_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(0))
     else:
-        schedule_body = "\n".join(
-            [
-                f'<tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {r["off_time"]} - <tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {r["on_time"]}'
-                for r in rows
-                if r['off_time'] != 'empty'
-            ]
-        )
+        outage_rows = [r for r in rows if r['off_time'] != 'empty']
+        total_no_light_minutes = 0
+        lines = []
+        for row in outage_rows:
+            off_minutes = minutes_from_str(row['off_time'])
+            on_minutes = minutes_from_str(row['on_time'])
+            duration_minutes = max(0, on_minutes - off_minutes)
+            total_no_light_minutes += duration_minutes
+            line_duration = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(duration_minutes))
+            lines.append(
+                f'<tg-emoji emoji-id="5330017696660599813">🔲</tg-emoji> {row["off_time"]} - '
+                f'<tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> {row["on_time"]} ({line_duration})'
+            )
+
+        schedule_body = "\n".join(lines)
+        total_light_minutes = max(0, 24 * 60 - total_no_light_minutes)
+        total_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(total_light_minutes))
+        total_no_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(total_no_light_minutes))
         updated_at = format_display_datetime(rows[0]['created_at'])
+
+    updated_at = updated_at.replace(' ', ' о ', 1) if updated_at != '—' else updated_at
 
     schedule_text = get_text(
         lang,
@@ -721,7 +743,9 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
         queue=q,
         date=display_date_str,
         schedule=schedule_body,
-        updated=updated_at
+        updated=updated_at,
+        total_light=total_light,
+        total_no_light=total_no_light
     )
 
     # Кнопки навигации
@@ -1248,6 +1272,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
