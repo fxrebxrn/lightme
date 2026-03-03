@@ -705,9 +705,6 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     # Единый стиль сообщения во всех состояниях
     if not rows:
         schedule_body = get_text(lang, 'no_schedule')
-        updated_at = "—"
-        total_light = "—"
-        total_no_light = "—"
     elif rows[0]['off_time'] == 'empty':
         schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
         updated_at = format_display_datetime(rows[0]['created_at'])
@@ -757,7 +754,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"vcomp_{comp}", style="danger"))
 
     try:
-        await call.message.edit_text(schedule_text, reply_markup=kb, parse_mode="HTML")
+        await call.message.edit_text(schedule_text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
     except Exception:
         if not rows:
             await call.answer(get_text(lang, 'no_schedule'), show_alert=True)
@@ -1272,6 +1269,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
