@@ -97,6 +97,7 @@ TEXTS = {
         'cmp_limit_reached': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Ви досягли ліміту збережених порівнянь 5/5. Видаліть старі, щоб зберегти нову.',
         'no_outages': 'Світло не вимикатимуть! <tg-emoji emoji-id="5208541126583136130">🎉</tg-emoji>',
         'schedule_hours_value': '{value} год.',
+        'schedule_view_no_data': '<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}',
     },
     'ru': {
         'select_lang': '<tg-emoji emoji-id="5449408995691341691">🇷🇺</tg-emoji> Пожалуйста, выберите язык:',
@@ -196,12 +197,14 @@ TEXTS = {
         'cmp_limit_reached': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Вы достигли лимита сохранённых сравнений 5/5. Удалите старые, чтобы сохранить новое.',
         'no_outages': 'Отключений не будет! <tg-emoji emoji-id="5208541126583136130">🎉</tg-emoji>',
         'schedule_hours_value': '{value} ч.',
+        'schedule_view_no_data': '<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}',
     }
 }
 
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
