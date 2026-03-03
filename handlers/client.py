@@ -725,7 +725,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
             line_duration = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(duration_minutes))
             lines.append(
                 f'<tg-emoji emoji-id="5330017696660599813">🔲</tg-emoji> {row["off_time"]} - '
-                f'<tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> {row["on_time"]} ({line_duration})'
+                f'<tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> {row["on_time"]} <i>({line_duration})</i>'
             )
 
         schedule_body = "\n".join(lines)
@@ -1282,6 +1282,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
