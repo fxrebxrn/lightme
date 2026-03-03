@@ -115,7 +115,7 @@ TEXTS = {
         'btn_settings': '⚙️ Настройки',
         'choose_comp': '<tg-emoji emoji-id="5967816500415827773">💻</tg-emoji> Выберите компанию:',
         'choose_queue': '<tg-emoji emoji-id="5257963315258204021">🏘</tg-emoji> Выберите очередь для <b>{company}</b>:',
-        'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}\n\n<tg-emoji emoji-id="5258216851472654189">💡</tg-emoji> <b>Со светом:</b> {total_light}\n<tg-emoji emoji-id="5258216851472654189">💡</tg-emoji> <b>Без света:</b> {total_no_light}\n\n<i>Обновлено: {updated}</i>\n\n<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монитор света</a>',
+        'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}\n\n<tg-emoji emoji-id="5407078373547582630">💡</tg-emoji> <b>Со светом:</b> {total_light}\n<tg-emoji emoji-id="5404500130449599239">💡</tg-emoji> <b>Без света:</b> {total_no_light}\n\n<i>Обновлено: {updated}</i>\n\n<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монитор света</a>',
         'no_schedule': '❗️ К сожалению, график для этой очереди на выбранную дату еще не загружен.',
         'back': '⬅️ Назад',
         'limit_error': '❗️ Максимум 5 очередей! Удалите что-то.',
@@ -204,6 +204,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
