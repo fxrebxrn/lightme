@@ -66,7 +66,7 @@ TEXTS = {
         'status_no_data': '<tg-emoji emoji-id="5879813604068298387">❗️</tg-emoji> <b>Немає актуального графіка для цієї черги.</b>',
         'status_refresh': '🔄 Оновити',
         'status_back': '⬅️ Назад',
-        'status_monitoring': '<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Моніторинг графіків</a>',
+        'status_monitoring': '<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монітор світла</a>',
         'status_hours_short': 'год.',
         'status_minutes_short': 'хв.',
         'status_less_minute': '< 1 хв.',
@@ -166,7 +166,7 @@ TEXTS = {
         'status_no_data': '<tg-emoji emoji-id="5879813604068298387">❗️</tg-emoji> <b>Нет актуального графика для этой очереди.</b>',
         'status_refresh': '🔄 Обновить',
         'status_back': '⬅️ Назад',
-        'status_monitoring': '<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Мониторинг графиков</a>',
+        'status_monitoring': '<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монитор света</a>',
         'status_hours_short': 'ч.',
         'status_minutes_short': 'мин.',
         'status_less_minute': '< 1 мин.',
@@ -204,6 +204,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
