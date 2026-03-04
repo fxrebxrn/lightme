@@ -689,9 +689,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     today_str = now_ua.strftime('%Y-%m-%d')
     tomorrow_str = (now_ua + timedelta(days=1)).strftime('%Y-%m-%d')
 
-    # Для БД всегда используем YYYY-MM-DD
     db_date_str = target_date_str or today_str
-    # Для пользователя показываем DD.MM.YYYY
     display_date_str = format_display_date(db_date_str)
 
     with get_db() as conn:
@@ -702,40 +700,66 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     kb = types.InlineKeyboardMarkup(row_width=1)
 
-    # Единый стиль сообщения во всех состояниях
+    # --- ЕСЛИ НЕТ ДАННЫХ ---
     if not rows:
         schedule_body = get_text(lang, 'no_schedule')
-        updated_at = "—"
-        total_light = "—"
-        total_no_light = "—"
+        updated_at = None
+        show_totals = False
+
+    # --- ЕСЛИ НЕТ ОТКЛЮЧЕНИЙ ---
     elif rows[0]['off_time'] == 'empty':
         schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
         updated_at = format_display_datetime(rows[0]['created_at'])
-        total_light = "—"
-        total_no_light = "—"
+        show_totals = False
+
+    # --- ЕСЛИ ЕСТЬ ОТКЛЮЧЕНИЯ ---
     else:
         outage_rows = [r for r in rows if r['off_time'] != 'empty']
         total_no_light_minutes = 0
         lines = []
+
         for row in outage_rows:
             off_minutes = minutes_from_str(row['off_time'])
             on_minutes = minutes_from_str(row['on_time'])
+
             duration_minutes = max(0, on_minutes - off_minutes)
             total_no_light_minutes += duration_minutes
-            line_duration = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(duration_minutes))
+
+            line_duration = get_text(
+                lang,
+                'schedule_hours_value',
+                value=_format_hours_decimal(duration_minutes)
+            )
+
             lines.append(
                 f'<tg-emoji emoji-id="5330017696660599813">🔲</tg-emoji> {row["off_time"]} - '
-                f'<tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> {row["on_time"]} <i>({line_duration})</i>'
+                f'<tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> {row["on_time"]} '
+                f'<i>({line_duration})</i>'
             )
 
         schedule_body = "\n".join(lines)
+
         total_light_minutes = max(0, 24 * 60 - total_no_light_minutes)
-        total_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(total_light_minutes))
-        total_no_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(total_no_light_minutes))
+
+        total_light = get_text(
+            lang,
+            'schedule_hours_value',
+            value=_format_hours_decimal(total_light_minutes)
+        )
+
+        total_no_light = get_text(
+            lang,
+            'schedule_hours_value',
+            value=_format_hours_decimal(total_no_light_minutes)
+        )
+
         updated_at = format_display_datetime(rows[0]['created_at'])
+        show_totals = True
 
-    updated_at = updated_at.replace(' ', ' о ', 1) if updated_at != '—' else updated_at
+    if updated_at:
+        updated_at = updated_at.replace(' ', ' о ', 1)
 
+    # --- ФОРМИРОВАНИЕ ТЕКСТА ---
     if not rows:
         schedule_text = get_text(
             lang,
@@ -746,33 +770,68 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
             schedule=schedule_body,
         )
     else:
-        schedule_text = get_text(
-            lang,
-            'schedule_view',
-            company=comp,
-            queue=q,
-            date=display_date_str,
-            schedule=schedule_body,
-            updated=updated_at,
-            total_light=total_light,
-            total_no_light=total_no_light
+        if show_totals:
+            schedule_text = get_text(
+                lang,
+                'schedule_view',
+                company=comp,
+                queue=q,
+                date=display_date_str,
+                schedule=schedule_body,
+                updated=updated_at,
+                total_light=total_light,
+                total_no_light=total_no_light
+            )
+        else:
+            schedule_text = get_text(
+                lang,
+                'schedule_view_no_totals',
+                company=comp,
+                queue=q,
+                date=display_date_str,
+                schedule=schedule_body,
+                updated=updated_at
+            )
+
+    # --- КНОПКИ ---
+    if db_date_str == today_str:
+        kb.add(
+            types.InlineKeyboardButton(
+                get_text(lang, 'tomorrow_label'),
+                callback_data=cb_sched.new(comp=comp, queue=q, date=tomorrow_str),
+                style="primary"
+            )
+        )
+    else:
+        kb.add(
+            types.InlineKeyboardButton(
+                get_text(lang, 'today_label'),
+                callback_data=cb_sched.new(comp=comp, queue=q, date=today_str),
+                style="primary"
+            )
         )
 
-    # Кнопки навигации
-    if db_date_str == today_str:
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'tomorrow_label'), callback_data=cb_sched.new(comp=comp, queue=q, date=tomorrow_str), style="primary"))
-    else:
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'today_label'), callback_data=cb_sched.new(comp=comp, queue=q, date=today_str), style="primary"))
-
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"vcomp_{comp}", style="danger"))
+    kb.add(
+        types.InlineKeyboardButton(
+            get_text(lang, 'back'),
+            callback_data=f"vcomp_{comp}",
+            style="danger"
+        )
+    )
 
     try:
-        await call.message.edit_text(schedule_text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+        await call.message.edit_text(
+            schedule_text,
+            reply_markup=kb,
+            parse_mode="HTML",
+            disable_web_page_preview=True
+        )
     except Exception:
         if not rows:
             await call.answer(get_text(lang, 'no_schedule'), show_alert=True)
         else:
             await call.answer()
+
     await call.answer()
     
 def _format_status_duration(delta: timedelta, lang: str):
@@ -1325,6 +1384,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
