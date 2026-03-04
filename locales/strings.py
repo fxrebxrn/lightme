@@ -17,6 +17,7 @@ TEXTS = {
         'choose_queue': '<tg-emoji emoji-id="5257963315258204021">🏘</tg-emoji> Оберіть чергу для <b>{company}</b>:',
         'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}\n\n<tg-emoji emoji-id="5407078373547582630">💡</tg-emoji> <b>Зі світлом:</b> {total_light}\n<tg-emoji emoji-id="5404500130449599239">💡</tg-emoji> <b>Без світла:</b> {total_no_light}\n\n<i>Оновлено: {updated}</i>\n\n<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монітор світла</a>',
         'no_schedule': '❗️ На жаль, графік для цієї черги на обрану дату ще не завантажено.',
+        'schedule_view_no_totals': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}\n\n<i>Оновлено: {updated}</i>\n\n<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монітор світла</a>',
         'back': '⬅️ Назад',
         'limit_error': '❗️ Максимум 5 черг! Видаліть щось.',
         'added': '✅ Підписано: {company} {queue}',
@@ -117,6 +118,7 @@ TEXTS = {
         'choose_queue': '<tg-emoji emoji-id="5257963315258204021">🏘</tg-emoji> Выберите очередь для <b>{company}</b>:',
         'schedule_view': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}\n\n<tg-emoji emoji-id="5407078373547582630">💡</tg-emoji> <b>Со светом:</b> {total_light}\n<tg-emoji emoji-id="5404500130449599239">💡</tg-emoji> <b>Без света:</b> {total_no_light}\n\n<i>Обновлено: {updated}</i>\n\n<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монитор света</a>',
         'no_schedule': '❗️ К сожалению, график для этой очереди на выбранную дату еще не загружен.',
+        'schedule_view_no_totals': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}\n\n<i>Обновлено: {updated}</i>\n\n<tg-emoji emoji-id="5258352344805971584">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot">Монитор света</a>',
         'back': '⬅️ Назад',
         'limit_error': '❗️ Максимум 5 очередей! Удалите что-то.',
         'added': '✅ Подписано: {company} {queue}',
@@ -204,6 +206,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
