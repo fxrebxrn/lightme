@@ -711,8 +711,8 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     elif rows[0]['off_time'] == 'empty':
         schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
         updated_at = format_display_datetime(rows[0]['created_at'])
-        total_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(24 * 60))
-        total_no_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(0))
+        total_light = "—"
+        total_no_light = "—"
     else:
         outage_rows = [r for r in rows if r['off_time'] != 'empty']
         total_no_light_minutes = 0
@@ -1214,7 +1214,7 @@ async def inline_echo(inline_query: types.InlineQuery):
                 hours_str = str(hours_float)
 
             lines.append(
-                f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {off_time} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {on_time} ({hours_str} год.)"""
+                f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {off_time} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {on_time} <i>({hours_str} год.)</i>"""
             )
 
         # итог по суткам
@@ -1237,8 +1237,8 @@ async def inline_echo(inline_query: types.InlineQuery):
             "\n"
             + "\n".join(lines)
             + "\n\n"
-            + f"✅ Зі світлом: {total_on_str} год.\n"
-            + f"❌ Без світла: {total_off_str} год."
+            + f"✅ <b>Зі світлом:</b> {total_on_str} год.\n"
+            + f"❌ <b>Без світла:</b> {total_off_str} год."
         )
 
     result_text = (
@@ -1325,6 +1325,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
