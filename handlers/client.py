@@ -1194,13 +1194,13 @@ async def inline_echo(inline_query: types.InlineQuery):
             f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
             for r in rows
         ]
-        schedule_text = f"<b>Графік на {display_date}:</b>\n\n" + "\n".join(lines)
+        schedule_text = f"\n" + "\n".join(lines)
 
     # Фінальний текст повідомлення (зі зміненою датою)
     result_text = (
-        f"<b>📅 {company} | Черга {queue}</b>\n\n"
+        f"<b>📅 Графік {company} {queue} на {display_date}:</b>\n"
         f"{schedule_text}\n\n"
-        f"💡 <a href='https://t.me/lightmeuaBot'>Моніторінг графіків</a>"
+        f"💡 <a href='https://t.me/lightmeuaBot'>Монітор світла</a>"
     )
 
     # Картка результату
@@ -1282,6 +1282,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
