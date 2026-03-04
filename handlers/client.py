@@ -1144,30 +1144,25 @@ async def inline_echo(inline_query: types.InlineQuery):
     if not query_text:
         return
 
-    # Розбиваємо запит на частини
     parts = query_text.split()
     if len(parts) < 2:
         return
 
-    # Компанія та черга
     company = parts[0].upper().replace('DTEK', 'ДТЕК')
     queue = parts[1]
-    
-    # Визначаємо дати
+
     now_ua = datetime.now(UA_TZ)
     today_dt = now_ua
     tomorrow_dt = now_ua + timedelta(days=1)
-    
+
     today_db = today_dt.strftime('%Y-%m-%d')
     tomorrow_db = tomorrow_dt.strftime('%Y-%m-%d')
 
-    # Логіка вибору дати
     target_date_db = today_db
-    display_date = today_dt.strftime('%d.%m.%Y') # Формат 01.03.2026
+    display_date = today_dt.strftime('%d.%m.%Y')
     day_label = "на сьогодні"
-    
-    # Перевірка на ключові слова
-    if any(word in query_text for word in ['завтра']):
+
+    if 'завтра' in query_text:
         target_date_db = tomorrow_db
         display_date = tomorrow_dt.strftime('%d.%m.%Y')
         day_label = "на завтра"
@@ -1176,38 +1171,86 @@ async def inline_echo(inline_query: types.InlineQuery):
         display_date = today_dt.strftime('%d.%m.%Y')
         day_label = "на сьогодні"
 
-    # Отримуємо дані з БД
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", 
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
             (company, queue, target_date_db)
         ).fetchall()
 
-    # Формуємо текст графіка
     if not rows:
-        schedule_text = f"\n❗️ На жаль, графік для цієї черги на обрану дату ще не завантажено."
+        schedule_text = "\n❗️ На жаль, графік для цієї черги на обрану дату ще не завантажено."
     elif rows[0]['off_time'] == 'empty':
-        schedule_text = f"\n✅ <b>Відключень не планується!</b> 🎉"
+        schedule_text = "\n✅ <b>Відключень не планується!</b> 🎉"
     else:
-        # Використовуємо твої преміум-емодзі
-        lines = [
-            f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {r['off_time']} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {r['on_time']}""" 
-            for r in rows
-        ]
-        schedule_text = f"\n" + "\n".join(lines)
+        total_off_minutes = 0
+        lines = []
 
-    # Фінальний текст повідомлення (зі зміненою датою)
+        for r in rows:
+            off_time = r['off_time']
+            on_time = r['on_time']
+
+            off_dt = datetime.strptime(off_time, "%H:%M")
+            on_dt = datetime.strptime(on_time, "%H:%M")
+
+            # переход через 00:00
+            if on_dt <= off_dt:
+                on_dt += timedelta(days=1)
+
+            # 23:59 считаем как 24:00
+            if on_time == "23:59":
+                on_dt += timedelta(minutes=1)
+
+            diff = on_dt - off_dt
+            minutes = int(diff.total_seconds() // 60)
+            total_off_minutes += minutes
+
+            # округление до 0.5 часа
+            hours_float = minutes / 60
+            hours_float = round(hours_float * 2) / 2
+
+            if hours_float.is_integer():
+                hours_str = str(int(hours_float))
+            else:
+                hours_str = str(hours_float)
+
+            lines.append(
+                f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {off_time} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {on_time} ({hours_str} год.)"""
+            )
+
+        # итог по суткам
+        total_hours_float = total_off_minutes / 60
+        total_hours_float = round(total_hours_float * 2) / 2
+
+        if total_hours_float.is_integer():
+            total_off_str = str(int(total_hours_float))
+        else:
+            total_off_str = str(total_hours_float)
+
+        total_on_float = 24 - total_hours_float
+
+        if total_on_float.is_integer():
+            total_on_str = str(int(total_on_float))
+        else:
+            total_on_str = str(total_on_float)
+
+        schedule_text = (
+            "\n"
+            + "\n".join(lines)
+            + "\n\n"
+            + f"✅ Зі світлом: {total_on_str} год.\n"
+            + f"❌ Без світла: {total_off_str} год."
+        )
+
     result_text = (
         f"<b>📅 Графік {company} {queue} на {display_date}:</b>\n"
         f"{schedule_text}\n\n"
         f"💡 <a href='https://t.me/lightmeuaBot'>Монітор світла</a>"
     )
 
-    # Картка результату
     item = types.InlineQueryResultArticle(
         id=str(uuid.uuid4()),
-        title=f"Графік {company} {queue} ({day_label})", # Тут залишається "на завтра/на сьогодні"
-        description=f"Натисніть, щоб відправити графік у чат",
+        title=f"Графік {company} {queue} ({day_label})",
+        description="Натисніть, щоб відправити графік у чат",
         input_message_content=types.InputTextMessageContent(
             message_text=result_text,
             parse_mode="HTML",
@@ -1282,6 +1325,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
