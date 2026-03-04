@@ -1185,9 +1185,9 @@ async def inline_echo(inline_query: types.InlineQuery):
 
     # Формуємо текст графіка
     if not rows:
-        schedule_text = f"❗️ На жаль, графік для цієї черги на обрану дату ще не завантажено."
+        schedule_text = f"\n❗️ На жаль, графік для цієї черги на обрану дату ще не завантажено."
     elif rows[0]['off_time'] == 'empty':
-        schedule_text = f"✅ <b>Відключень не планується!</b> 🎉"
+        schedule_text = f"\n✅ <b>Відключень не планується!</b> 🎉"
     else:
         # Використовуємо твої преміум-емодзі
         lines = [
@@ -1282,6 +1282,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
