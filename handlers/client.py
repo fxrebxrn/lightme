@@ -708,7 +708,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
         updated_at = "—"
         total_light = "—"
         total_no_light = "—"
-    elif rows[0]['off_time'] == 'empty':
+    elif not rows[0]['off_time'] == 'empty':
         schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
         updated_at = format_display_datetime(rows[0]['created_at'])
         total_light = "—"
@@ -1325,6 +1325,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
