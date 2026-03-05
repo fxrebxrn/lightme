@@ -679,6 +679,61 @@ async def save_sub(call: types.CallbackQuery, callback_data: dict, scheduler):
             print(f"Database error: {e}")
             await call.answer(get_text(lang, 'exists'), show_alert=True)
 
+def format_remaining_time(minutes, lang):
+    hours = minutes // 60
+    mins = minutes % 60
+
+    parts = []
+
+    if hours > 0:
+        if lang == "ru":
+            parts.append(f"{hours} ч.")
+        else:
+            parts.append(f"{hours} год.")
+
+    if mins > 0:
+        if lang == "ru":
+            parts.append(f"{mins} мин.")
+        else:
+            parts.append(f"{mins} хв.")
+
+    return " ".join(parts)
+
+
+def get_status_line(outages, now_time, lang):
+    now_minutes = minutes_from_str(now_time)
+
+    for off, on in outages:
+        off_m = minutes_from_str(off)
+        on_m = minutes_from_str(on)
+
+        if off_m <= now_minutes < on_m:
+            remain = on_m - now_minutes
+            remain_text = format_remaining_time(remain, lang)
+
+            return get_text(
+                lang,
+                'status_no_light_until',
+                time=on,
+                remain=remain_text
+            )
+
+    for off, on in outages:
+        off_m = minutes_from_str(off)
+
+        if now_minutes < off_m:
+            remain = off_m - now_minutes
+            remain_text = format_remaining_time(remain, lang)
+
+            return get_text(
+                lang,
+                'status_light_until',
+                time=off,
+                remain=remain_text
+            )
+
+    return get_text(lang, 'status_light_now')
+
 # Обновленная функция просмотра графиков с кнопками Сегодня/Завтра
 async def show_sched(call: types.CallbackQuery, callback_data: dict):
     comp, q = callback_data['comp'], callback_data['queue']
@@ -700,46 +755,62 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     kb = types.InlineKeyboardMarkup(row_width=1)
 
-    # --- ЕСЛИ НЕТ ДАННЫХ ---
+    # --- НЕТ ДАННЫХ ---
     if not rows:
-        schedule_body = get_text(lang, 'no_schedule')
-        updated_at = None
-        show_totals = False
 
-    # --- ЕСЛИ НЕТ ОТКЛЮЧЕНИЙ ---
+        schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
+
+{get_text(lang,'schedule_not_loaded')}
+
+{get_text(lang,'monitor_link')}
+"""
+
+    # --- НЕТ ОТКЛЮЧЕНИЙ ---
     elif rows[0]['off_time'] == 'empty':
-        schedule_body = f"✅ <b>{get_text(lang, 'no_outages')}</b>"
-        updated_at = format_display_datetime(rows[0]['created_at'])
-        show_totals = False
 
-    # --- ЕСЛИ ЕСТЬ ОТКЛЮЧЕНИЯ ---
+        updated_at = format_display_datetime(rows[0]['created_at']).replace(' ', ' о ', 1)
+
+        schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
+
+{get_text(lang,'no_outages_today')}
+
+🕓 {get_text(lang,'updated')} {updated_at}
+
+{get_text(lang,'monitor_link')}
+"""
+
+    # --- ЕСТЬ ОТКЛЮЧЕНИЯ ---
     else:
+
         outage_rows = [r for r in rows if r['off_time'] != 'empty']
-        total_no_light_minutes = 0
+
+        outages = []
         lines = []
+        total_no_light_minutes = 0
 
         for row in outage_rows:
+
             off_minutes = minutes_from_str(row['off_time'])
             on_minutes = minutes_from_str(row['on_time'])
 
             duration_minutes = max(0, on_minutes - off_minutes)
             total_no_light_minutes += duration_minutes
 
-            line_duration = get_text(
+            outages.append((row['off_time'], row['on_time']))
+
+            duration_text = get_text(
                 lang,
                 'schedule_hours_value',
                 value=_format_hours_decimal(duration_minutes)
             )
 
             lines.append(
-                f'<tg-emoji emoji-id="5330017696660599813">🔲</tg-emoji> {row["off_time"]} - '
-                f'<tg-emoji emoji-id="5330396907913098490">🟩</tg-emoji> {row["on_time"]} '
-                f'<i>({line_duration})</i>'
+                f"🔌 {row['off_time']} - {row['on_time']} ({duration_text})"
             )
 
         schedule_body = "\n".join(lines)
 
-        total_light_minutes = max(0, 24 * 60 - total_no_light_minutes)
+        total_light_minutes = max(0, 24*60 - total_no_light_minutes)
 
         total_light = get_text(
             lang,
@@ -753,67 +824,52 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
             value=_format_hours_decimal(total_no_light_minutes)
         )
 
-        updated_at = format_display_datetime(rows[0]['created_at'])
-        show_totals = True
+        updated_at = format_display_datetime(rows[0]['created_at']).replace(' ', ' о ', 1)
 
-    if updated_at:
-        updated_at = updated_at.replace(' ', ' о ', 1)
+        now_time = now_ua.strftime("%H:%M")
 
-    # --- ФОРМИРОВАНИЕ ТЕКСТА ---
-    if not rows:
-        schedule_text = get_text(
-            lang,
-            'schedule_view_no_data',
-            company=comp,
-            queue=q,
-            date=display_date_str,
-            schedule=schedule_body,
-        )
-    else:
-        if show_totals:
-            schedule_text = get_text(
-                lang,
-                'schedule_view',
-                company=comp,
-                queue=q,
-                date=display_date_str,
-                schedule=schedule_body,
-                updated=updated_at,
-                total_light=total_light,
-                total_no_light=total_no_light
-            )
-        else:
-            schedule_text = get_text(
-                lang,
-                'schedule_view_no_totals',
-                company=comp,
-                queue=q,
-                date=display_date_str,
-                schedule=schedule_body,
-                updated=updated_at
-            )
+        status_line = get_status_line(outages, now_time, lang)
+
+        schedule_text = f"""🗓 {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
+
+{status_line}
+
+{get_text(lang,'section_outages')}
+{schedule_body}
+
+{get_text(lang,'section_stats')}
+{get_text(lang,'stats_light',value=total_light)}
+{get_text(lang,'stats_no_light',value=total_no_light)}
+
+🕓 {get_text(lang,'updated')} {updated_at}
+
+{get_text(lang,'monitor_link')}
+"""
 
     # --- КНОПКИ ---
     if db_date_str == today_str:
+
         kb.add(
             types.InlineKeyboardButton(
-                get_text(lang, 'tomorrow_label'),
-                callback_data=cb_sched.new(comp=comp, queue=q, date=tomorrow_str),
+                get_text(lang,'tomorrow_label'),
+                callback_data=cb_sched.new(comp=comp,queue=q,date=tomorrow_str),
                 style="primary"
             )
         )
+
     else:
+
         kb.add(
             types.InlineKeyboardButton(
-                get_text(lang, 'today_label'),
-                callback_data=cb_sched.new(comp=comp, queue=q, date=today_str),
+                get_text(lang,'today_label'),
+                callback_data=cb_sched.new(comp=comp,queue=q,date=today_str),
                 style="primary"
             )
         )
 
     kb.add(
         types.InlineKeyboardButton(
-            get_text(lang, 'back'),
+            get_text(lang,'back'),
             callback_data=f"vcomp_{comp}",
             style="danger"
         )
@@ -827,223 +883,8 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
             disable_web_page_preview=True
         )
     except Exception:
-        if not rows:
-            await call.answer(get_text(lang, 'no_schedule'), show_alert=True)
-        else:
-            await call.answer()
-
-    await call.answer()
-    
-def _format_status_duration(delta: timedelta, lang: str):
-    total_minutes = max(0, int(delta.total_seconds() // 60))
-    hours = total_minutes // 60
-    mins = total_minutes % 60
-
-    parts = []
-    if hours > 0:
-        parts.append(f"{hours} {get_text(lang, 'status_hours_short')}")
-    if mins > 0:
-        parts.append(f"{mins} {get_text(lang, 'status_minutes_short')}")
-
-    if not parts:
-        return get_text(lang, 'status_less_minute')
-
-    return " ".join(parts)
-
-def _get_status_snapshot(company: str, queue: str):
-    now_ua = datetime.now(UA_TZ)
-    today = now_ua.date()
-    tomorrow = today + timedelta(days=1)
-
-    with get_db() as conn:
-        rows_today = conn.execute(
-            "SELECT date, off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=? ORDER BY off_time ASC",
-            (company, queue, today.strftime('%Y-%m-%d'))
-        ).fetchall()
-        rows_tomorrow = conn.execute(
-            "SELECT date, off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=? ORDER BY off_time ASC",
-            (company, queue, tomorrow.strftime('%Y-%m-%d'))
-        ).fetchall()
-
-    if not rows_today and not rows_tomorrow:
-        return None
-
-    intervals = []
-    for row in list(rows_today) + list(rows_tomorrow):
-        if row['off_time'] == 'empty':
-            continue
-        try:
-            off_dt = parse_localized_datetime(row['date'], row['off_time'])
-            on_dt = parse_localized_datetime(row['date'], row['on_time'])
-        except Exception:
-            continue
-        intervals.append((off_dt, on_dt))
-
-    if not intervals:
-        return {'state': 'on', 'next_event': None}
-
-    intervals.sort(key=lambda item: item[0])
-
-    now_off_interval = None
-    next_off_interval = None
-    for off_dt, on_dt in intervals:
-        if off_dt <= now_ua < on_dt:
-            now_off_interval = (off_dt, on_dt)
-            break
-        if off_dt > now_ua and next_off_interval is None:
-            next_off_interval = (off_dt, on_dt)
-
-    if now_off_interval is not None:
-        return {
-            'state': 'off',
-            'next_event': 'on',
-            'target': now_off_interval[1],
-            'off_time': now_off_interval[0],
-            'on_time': now_off_interval[1],
-        }
-
-    if next_off_interval is not None:
-        return {
-            'state': 'on',
-            'next_event': 'off',
-            'target': next_off_interval[0],
-            'off_time': next_off_interval[0],
-            'on_time': next_off_interval[1],
-        }
-
-    return {'state': 'on', 'next_event': None}
-
-
-def build_status_message(company: str, queue: str, lang: str):
-    snapshot = _get_status_snapshot(company, queue)
-    title = get_text(lang, 'status_title', company=company, queue=queue)
-
-    if not snapshot:
-        return f"{title}\n\n{get_text(lang, 'status_no_data')}\n\n{get_text(lang, 'status_monitoring')}"
-
-    state_line = get_text(lang, 'status_now_on') if snapshot['state'] == 'on' else get_text(lang, 'status_now_off')
-
-    if snapshot.get('next_event') is None:
-        return f"{title}\n\n{state_line}\n\n{get_text(lang, 'status_no_data')}\n\n{get_text(lang, 'status_monitoring')}"
-
-    now_ua = datetime.now(UA_TZ)
-    target = snapshot['target']
-    duration = _format_status_duration(target - now_ua, lang)
-
-    if snapshot['next_event'] == 'off':
-        countdown_line = get_text(lang, 'status_to_off', duration=duration, time=snapshot['off_time'].strftime('%H:%M'))
-        event_line = get_text(
-            lang,
-            'status_next_off',
-            off_time=snapshot['off_time'].strftime('%H:%M'),
-            on_time=snapshot['on_time'].strftime('%H:%M')
-        )
-    else:
-        countdown_line = get_text(lang, 'status_to_on', duration=duration, time=snapshot['on_time'].strftime('%H:%M'))
-        event_line = get_text(lang, 'status_next_on', on_time=snapshot['on_time'].strftime('%H:%M'))
-
-    # Якщо подія відбудеться завтра, додаємо слово "завтра" перед "о" або "в"
-    if target.date() > now_ua.date():
-        word = "завтра" if lang == 'uk' else "завтра" # Можна замінити друге на "завтра", якщо є російська локалізація
-        event_line = event_line.replace(" о ", f" {word} о ").replace(" в ", f" {word} в ")
-        countdown_line = countdown_line.replace(" о ", f" {word} о ").replace(" в ", f" {word} в ")
-
-    return f"{title}\n\n{state_line}\n\n{countdown_line}\n\n{event_line}\n\n{get_text(lang, 'status_monitoring')}"
-
-
-def status_actions_kb(lang: str, company: str, queue: str):
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        types.InlineKeyboardButton(
-            get_text(lang, 'status_refresh'),
-            callback_data=cb_status.new(action='refresh', comp=company, queue=queue),
-            style='primary'
-        ),
-        types.InlineKeyboardButton(
-            get_text(lang, 'status_back'),
-            callback_data=cb_status.new(action='back', comp=company, queue=queue),
-            style='danger'
-        )
-    )
-    return kb
-
-
-async def status_cmd(message: types.Message):
-    lang = get_user_lang(message.from_user.id)
-
-    with get_db() as conn:
-        rows = conn.execute(
-            "SELECT DISTINCT company, queue FROM users WHERE user_id=? ORDER BY company, queue",
-            (message.from_user.id,)
-        ).fetchall()
-
-    if not rows:
-        await message.answer(get_text(lang, 'empty_list'))
-        return
-
-    if len(rows) == 1:
-        comp, queue = rows[0]['company'], rows[0]['queue']
-        text = build_status_message(comp, queue, lang)
-        await message.answer(
-            text,
-            reply_markup=status_actions_kb(lang, comp, queue),
-            parse_mode='HTML',
-            disable_web_page_preview=True
-        )
-        return
-
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    for row in rows:
-        comp, queue = row['company'], row['queue']
-        kb.add(
-            types.InlineKeyboardButton(
-                f"{comp} {queue}",
-                callback_data=cb_status.new(action='show', comp=comp, queue=queue),
-                style='primary'
-            )
-        )
-
-    await message.answer(get_text(lang, 'status_choose_queue'), reply_markup=kb)
-
-
-async def status_callback(call: types.CallbackQuery, callback_data: dict):
-    lang = get_user_lang(call.from_user.id)
-    action = callback_data['action']
-
-    if action == 'back':
-        with get_db() as conn:
-            rows = conn.execute(
-                "SELECT DISTINCT company, queue FROM users WHERE user_id=? ORDER BY company, queue",
-                (call.from_user.id,)
-            ).fetchall()
-
-        if len(rows) <= 1:
-            await call.message.answer(get_text(lang, 'menu_main'), reply_markup=main_menu_kb(lang))
-            await call.answer()
-            return
-
-        kb = types.InlineKeyboardMarkup(row_width=2)
-        for row in rows:
-            comp, queue = row['company'], row['queue']
-            kb.add(types.InlineKeyboardButton(
-                f"{comp} {queue}",
-                callback_data=cb_status.new(action='show', comp=comp, queue=queue),
-                style='primary'
-            ))
-
-        await call.message.edit_text(get_text(lang, 'status_choose_queue'), reply_markup=kb)
         await call.answer()
-        return
 
-    comp, queue = callback_data['comp'], callback_data['queue']
-    text = build_status_message(comp, queue, lang)
-
-    await call.message.edit_text(
-        text,
-        reply_markup=status_actions_kb(lang, comp, queue),
-        parse_mode='HTML',
-        disable_web_page_preview=True
-    )
     await call.answer()
 
 async def my_queues(message: types.Message):
@@ -1384,6 +1225,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
