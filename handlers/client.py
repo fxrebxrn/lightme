@@ -1112,7 +1112,7 @@ async def inline_echo(inline_query: types.InlineQuery):
                 hours_str = str(hours_float)
 
             lines.append(
-                f"""<tg-emoji emoji-id="5262779352281549858">🔴</tg-emoji> {off_time} - <tg-emoji emoji-id="5262874597476309620">🟢</tg-emoji> {on_time} <i>({hours_str} год.)</i>"""
+                f"""🔌 {off_time} - {on_time} <i>({hours_str} год.)</i>"""
             )
 
         # итог по суткам
@@ -1142,7 +1142,7 @@ async def inline_echo(inline_query: types.InlineQuery):
     result_text = (
         f"<b>📅 Графік {company} {queue} на {display_date}:</b>\n"
         f"{schedule_text}\n\n"
-        f"💡 <a href='https://t.me/lightmeuaBot'>Монітор світла</a>"
+        f"💡 <a href='https://t.me/lightmeuaBot'><b>Монітор світла</b></a>"
     )
 
     item = types.InlineQueryResultArticle(
@@ -1220,6 +1220,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
