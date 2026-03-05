@@ -100,17 +100,17 @@ TEXTS = {
         'schedule_hours_value': '{value} год.',
         'schedule_view_no_data': '<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}',
        
-        'status_light_until': "<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> світло є до <b>{time}</b> <i>(ще {remain})</i>",
-        'status_no_light_until': "<tg-emoji emoji-id="5280474686260527507">🔴</tg-emoji> <b>Статус:</b> світла немає до <b>{time}</b> <i>(ще {remain})</i>",
-        'status_light_now': "<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> світло є",
-        'section_outages': "<tg-emoji emoji-id="5978809241576673582">✅</tg-emoji> <b>Відключення:</b>",
-        'section_stats': "<tg-emoji emoji-id="5875291072225087249">📊</tg-emoji> <b>Статистика:</b>",
-        'stats_light': "<tg-emoji emoji-id="5845677551892042113">⚡️</tg-emoji> <b>Зі світлом:</b> {value}",
-        'stats_no_light': "<tg-emoji emoji-id="5258084811293102719">⚡️</tg-emoji> <b>Без світла:</b> {value}",
-        'monitor_link': "<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot"><b>Монітор світла</b></a>",
+        'status_light_until': '<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> світло є до <b>{time}</b> <i>(ще {remain})</i>',
+        'status_no_light_until': '<tg-emoji emoji-id="5280863578369311403">🔴</tg-emoji> <b>Статус:</b> світла немає до <b>{time}</b> <i>(ще {remain})</i>',
+        'status_light_now': '<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> світло є',
+        'section_outages': '<tg-emoji emoji-id="5978809241576673582">✅</tg-emoji> <b>Відключення:</b>',
+        'section_stats': '<tg-emoji emoji-id="5875291072225087249">📊</tg-emoji> <b>Статистика:</b>',
+        'stats_light': '<tg-emoji emoji-id="5845677551892042113">⚡️</tg-emoji> <b>Зі світлом:</b> {value}',
+        'stats_no_light': '<tg-emoji emoji-id="5258084811293102719">⚡️</tg-emoji> <b>Без світла:</b> {value}',
+        'monitor_link': '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot"><b>Монітор світла</b></a>',
         'schedule_not_loaded':
-        "<tg-emoji emoji-id="6019102674832595118">⚠️</tg-emoji> На жаль, графік для цієї черги на обрану дату ще не завантажено.",
-        'no_outages_today': "<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Світло не вимикатимуть!</b>",
+        '<tg-emoji emoji-id="6019102674832595118">⚠️</tg-emoji> На жаль, графік для цієї черги на обрану дату ще не завантажено.',
+        'no_outages_today': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Світло не вимикатимуть!</b>',
     },
     'ru': {
         'select_lang': '<tg-emoji emoji-id="5449408995691341691">🇷🇺</tg-emoji> Пожалуйста, выберите язык:',
@@ -213,23 +213,24 @@ TEXTS = {
         'schedule_hours_value': '{value} ч.',
         'schedule_view_no_data': '<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}',
 
-        'status_light_until': "<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> свет есть до <b>{time}</b> <i>(ещё {remain})</i>",
-        'status_no_light_until': "<tg-emoji emoji-id="5280474686260527507">🔴</tg-emoji> <b>Статус:</b> света нет до <b>{time}</b> <i>(ещё {remain})</i>",
-        'status_light_now': "<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> света нет",
-        'section_outages': "<tg-emoji emoji-id="5978809241576673582">✅</tg-emoji> <b>Отключения:</b>",
-        'section_stats': "<tg-emoji emoji-id="5875291072225087249">📊</tg-emoji> <b>Статистика:</b>",
-        'stats_light': "<tg-emoji emoji-id="5845677551892042113">⚡️</tg-emoji> <b>Со светом:</b> {value}",
-        'stats_no_light': "<tg-emoji emoji-id="5258084811293102719">⚡️</tg-emoji> <b>Без света:</b> {value}",
-        'monitor_link': "<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot"><b>Монитор света</b></a>",
+        'status_light_until': '<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> свет есть до <b>{time}</b> <i>(ещё {remain})</i>',
+        'status_no_light_until': '<tg-emoji emoji-id="5280474686260527507">🔴</tg-emoji> <b>Статус:</b> света нет до <b>{time}</b> <i>(ещё {remain})</i>',
+        'status_light_now': '<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> света нет',
+        'section_outages': '<tg-emoji emoji-id="5978809241576673582">✅</tg-emoji> <b>Отключения:</b>',
+        'section_stats': '<tg-emoji emoji-id="5875291072225087249">📊</tg-emoji> <b>Статистика:</b>',
+        'stats_light': '<tg-emoji emoji-id="5845677551892042113">⚡️</tg-emoji> <b>Со светом:</b> {value}',
+        'stats_no_light': '<tg-emoji emoji-id="5258084811293102719">⚡️</tg-emoji> <b>Без света:</b> {value}',
+        'monitor_link': '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot"><b>Монитор света</b></a>',
         'schedule_not_loaded':
-        "<tg-emoji emoji-id="6019102674832595118">⚠️</tg-emoji> К сожелению, график на эту очередь еще не загружен.",
-        'no_outages_today': "<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Свет не будут выключать!</b>",
+        '<tg-emoji emoji-id="6019102674832595118">⚠️</tg-emoji> К сожелению, график на эту очередь еще не загружен.',
+        'no_outages_today': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Свет не будут выключать!</b>',
     }
 }
 
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
