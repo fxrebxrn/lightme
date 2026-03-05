@@ -228,7 +228,7 @@ async def notify_users_about_update(bot, company, date_str, results):
                     off = it.get('off_time', '').strip()
                     on = it.get('on_time', '').strip()
                     if off and on and off not in ['-', 'empty']:
-                        schedule_lines.append(f'<tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {off} - <tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {on}')
+                        schedule_lines.append(f'<tg-emoji emoji-id="6019346268197759615">🔌</tg-emoji> {off} - {on}')
 
             schedule_text = "\n".join(schedule_lines) if schedule_lines else ""
 
@@ -368,6 +368,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
