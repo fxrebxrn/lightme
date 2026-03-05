@@ -772,7 +772,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
 {get_text(lang,'no_outages_today')}
 
-🕓 {get_text(lang,'updated')} {updated_at}
+<i>{get_text(lang,'updated')} {updated_at}</i>
 
 {get_text(lang,'monitor_link')}
 """
@@ -803,7 +803,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
             )
 
             lines.append(
-                f"🔌 {row['off_time']} - {row['on_time']} ({duration_text})"
+                f"""<tg-emoji emoji-id="6019346268197759615">🔌</tg-emoji> {row['off_time']} - {row['on_time']} <i>({duration_text})</i>"""
             )
 
         schedule_body = "\n".join(lines)
@@ -828,7 +828,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
         status_line = get_status_line(outages, now_time, lang)
 
-        schedule_text = f"""🗓 {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
+        schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
 
 {status_line}
 
@@ -839,7 +839,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 {get_text(lang,'stats_light',value=total_light)}
 {get_text(lang,'stats_no_light',value=total_no_light)}
 
-🕓 {get_text(lang,'updated')} {updated_at}
+<i>{get_text(lang,'updated')} {updated_at}</i>
 
 {get_text(lang,'monitor_link')}
 """
@@ -1220,6 +1220,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
