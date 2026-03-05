@@ -111,6 +111,7 @@ TEXTS = {
         'schedule_not_loaded':
         '<tg-emoji emoji-id="6019102674832595118">⚠️</tg-emoji> На жаль, графік для цієї черги на обрану дату ще не завантажено.',
         'no_outages_today': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Світло не вимикатимуть!</b>',
+        'updated': '<tg-emoji emoji-id="5900104897885376843">🕓</tg-emoji> Оновлення',
     },
     'ru': {
         'select_lang': '<tg-emoji emoji-id="5449408995691341691">🇷🇺</tg-emoji> Пожалуйста, выберите язык:',
@@ -224,12 +225,14 @@ TEXTS = {
         'schedule_not_loaded':
         '<tg-emoji emoji-id="6019102674832595118">⚠️</tg-emoji> К сожелению, график на эту очередь еще не загружен.',
         'no_outages_today': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Свет не будут выключать!</b>',
+        'updated': '<tg-emoji emoji-id="5900104897885376843">🕓</tg-emoji> Обновление',
     }
 }
 
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
