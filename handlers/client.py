@@ -33,7 +33,6 @@ cb_menu = CallbackData("menu", "action", "val")
 # Обновлено: добавлен параметр date
 cb_sched = CallbackData("sched", "comp", "queue", "date") 
 cb_notify = CallbackData("notify", "key", "val")
-cb_status = CallbackData("status", "action", "comp", "queue")
 
 # --- Утилиты работы с сохранёнными сравнениями в БД ---
 def ensure_compares_table():
@@ -173,7 +172,6 @@ def main_menu_kb(lang):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(get_text(lang, 'btn_add_queue'), get_text(lang, 'btn_my_queues'))
     kb.row(get_text(lang, 'btn_schedules'), get_text(lang, 'btn_compare'))
-    kb.row(get_text(lang, 'btn_status'))
     kb.row(get_text(lang, 'btn_settings'), get_text(lang, 'btn_support'))
     return kb
 
@@ -1187,7 +1185,6 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(view_schedules_start, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["графік", "график"]))
     dp.register_message_handler(add_queue_btn, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["додати", "добавить"]))
     dp.register_message_handler(my_queues, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["мої чер", "мои оче"]))
-    dp.register_message_handler(status_cmd, lambda m: bool(m.text) and m.text in (get_text('uk', 'btn_status'), get_text('ru', 'btn_status')))
 
     support_labels = (get_text('uk', 'btn_support'), get_text('ru', 'btn_support'))
     settings_labels = (get_text('uk', 'btn_settings'), get_text('ru', 'btn_settings'))
@@ -1205,7 +1202,6 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(open_notifications, text="open_notifications")
     dp.register_callback_query_handler(toggle_notify, cb_notify.filter())
-    dp.register_callback_query_handler(status_callback, cb_status.filter())
     dp.register_callback_query_handler(toggle_all_notify, text="toggle_all")
     dp.register_callback_query_handler(back_to_settings_from_notifications, text="open_settings_back")
 
@@ -1222,9 +1218,9 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(support_cmd, commands=['support'])
     dp.register_message_handler(settings_cmd, commands=['settings'])
     dp.register_message_handler(compare_menu, commands=['compare'])
-    dp.register_message_handler(status_cmd, commands=['status'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
