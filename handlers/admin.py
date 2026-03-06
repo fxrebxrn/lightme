@@ -244,7 +244,7 @@ async def notify_users_about_update(bot, company, date_str, results):
                             
                             total_off_minutes += diff_minutes
                             
-                            hours_val = diff_minutes / 60
+                            hours_val = round(diff_minutes / 60, 1)
                             display_hours = int(hours_val) if hours_val.is_integer() else hours_val
                         except Exception:
                             display_hours = 0
@@ -256,8 +256,8 @@ async def notify_users_about_update(bot, company, date_str, results):
                         })
 
             # Підсумки за добу
-            off_h = total_off_minutes / 60
-            on_h = 24 - off_h
+            off_h = round(total_off_minutes / 60, 1)
+            on_h = round(24 - off_h, 1)
             
             fmt_off = int(off_h) if off_h.is_integer() else off_h
             fmt_on = int(on_h) if on_h.is_integer() else on_h
@@ -293,7 +293,7 @@ async def notify_users_about_update(bot, company, date_str, results):
                     off_label = "⚡️ Без світла:"
                     footer_link = "Монітор світла"
 
-                footer = f"\n\n🤩 <a href='https://t.me/lightmeuaBot'>{footer_link}</a>"
+                footer = f"{footer_link}"
                 
                 if is_no_outages:
                     status_msg = get_text(lang, 'no_outages') 
@@ -439,6 +439,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
