@@ -563,7 +563,6 @@ def main_menu_kb(lang):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(get_text(lang, 'btn_add_queue'), get_text(lang, 'btn_my_queues'))
     kb.row(get_text(lang, 'btn_schedules'), get_text(lang, 'btn_compare'))
-    kb.row(get_text(lang, 'btn_status'))
     kb.row(get_text(lang, 'btn_settings'), get_text(lang, 'btn_support'))
     return kb
 
@@ -1220,6 +1219,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
