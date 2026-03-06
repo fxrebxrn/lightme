@@ -111,7 +111,7 @@ TEXTS = {
         '<tg-emoji emoji-id="6019102674832595118">⚠️</tg-emoji> На жаль, графік для цієї черги на обрану дату ще не завантажено.',
         'no_outages_today': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Світло не вимикатимуть!</b>',
         'updated': '<tg-emoji emoji-id="5900104897885376843">🕓</tg-emoji> Оновлення',
-        'schedule_title': '<b>Графік {company} {queue} на {date}</b>'
+        'schedule_title': '<b>Графік {company} {queue} на {date}</b>',
 
         'update_notify': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> <b>Оновлення графіку {company} {queue} на {date}:</b>',
         'notify_outages_title': '<tg-emoji emoji-id="5978809241576673582">✅</tg-emoji> <b>Відключення:</b>',
@@ -233,7 +233,7 @@ TEXTS = {
         '<tg-emoji emoji-id="6019102674832595118">⚠️</tg-emoji> К сожелению, график на эту очередь еще не загружен.',
         'no_outages_today': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Свет не будут выключать!</b>',
         'updated': '<tg-emoji emoji-id="5900104897885376843">🕓</tg-emoji> Обновление',
-        'schedule_title': '<b>График {company} {queue} на {date}</b>'
+        'schedule_title': '<b>График {company} {queue} на {date}</b>',
 
         'update_notify': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> <b>Обновление графика {company} {queue} на {date}:</b>',
         'notify_outages_title': '<tg-emoji emoji-id="5978809241576673582">✅</tg-emoji> <b>Отключения:</b>',
@@ -248,6 +248,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
