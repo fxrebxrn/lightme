@@ -217,7 +217,9 @@ async def notify_users_about_update(bot, company, date_str, results):
             # Перевіряємо, чи є маркер порожнечі ('-' з парсера або 'empty' з бази)
             is_no_outages = any(it.get('off_time') in ['-', 'empty'] for it in items)
 
-            schedule_lines = []
+            total_off_minutes = 0
+            schedule_data = [] # Зберігаємо дані як словники, щоб локалізувати потім
+
             if not is_no_outages:
                 try:
                     items_sorted = sorted(items, key=lambda x: x.get('off_time', ''))
@@ -227,10 +229,38 @@ async def notify_users_about_update(bot, company, date_str, results):
                 for it in items_sorted:
                     off = it.get('off_time', '').strip()
                     on = it.get('on_time', '').strip()
+                    
                     if off and on and off not in ['-', 'empty']:
-                        schedule_lines.append(f'<tg-emoji emoji-id="6019346268197759615">🔌</tg-emoji> {off} - {on}')
+                        # Рахуємо тривалість відключення
+                        try:
+                            from datetime import datetime
+                            t1 = datetime.strptime(off, '%H:%M')
+                            t2 = datetime.strptime(on, '%H:%M')
+                            
+                            if on == '00:00' or t2 <= t1:
+                                diff_minutes = 1440 - (t1.hour * 60 + t1.minute)
+                            else:
+                                diff_minutes = (t2 - t1).seconds // 60
+                            
+                            total_off_minutes += diff_minutes
+                            
+                            hours_val = diff_minutes / 60
+                            display_hours = int(hours_val) if hours_val.is_integer() else hours_val
+                        except Exception:
+                            display_hours = 0
+                            
+                        schedule_data.append({
+                            'off': off,
+                            'on': on,
+                            'hours': display_hours
+                        })
 
-            schedule_text = "\n".join(schedule_lines) if schedule_lines else ""
+            # Підсумки за добу
+            off_h = total_off_minutes / 60
+            on_h = 24 - off_h
+            
+            fmt_off = int(off_h) if off_h.is_integer() else off_h
+            fmt_on = int(on_h) if on_h.is_integer() else on_h
 
             users = conn.execute('''
                 SELECT u.user_id, p.language 
@@ -241,18 +271,59 @@ async def notify_users_about_update(bot, company, date_str, results):
 
             for user in users:
                 lang = user['language'] or 'uk'
+                
+                # Заголовок
                 header = get_text(lang, 'update_notify', company=company, queue=queue, date=format_display_date(date_str))
+                
+                # Футер з посиланням
+                link_text = get_text(lang, 'monitor_link') if hasattr(get_text, 'monitor_link') else 'Монітор світла'
+                # На випадок якщо в словнику ще немає ключів, використовуємо fallback значення через try-except або get
+                try:
+                    h_unit = get_text(lang, 'hour_short_dot')
+                    outages_title = get_text(lang, 'notify_outages_title')
+                    stats_title = get_text(lang, 'notify_stats_title')
+                    on_label = get_text(lang, 'notify_on_label')
+                    off_label = get_text(lang, 'notify_off_label')
+                    footer_link = get_text(lang, 'monitor_link')
+                except Exception:
+                    h_unit = "год." if lang == 'uk' else "ч."
+                    outages_title = "✅ Відключення:"
+                    stats_title = "📊 Статистика:"
+                    on_label = "⚡️ Зі світлом:"
+                    off_label = "⚡️ Без світла:"
+                    footer_link = "Монітор світла"
+
+                footer = f"\n\n🤩 <a href='https://t.me/lightmeuaBot'>{footer_link}</a>"
                 
                 if is_no_outages:
                     status_msg = get_text(lang, 'no_outages') 
-                    text = f"{header}\n\n✅ <b>{status_msg}</b>"
-                elif schedule_text:
-                    text = f"{header}\n\n{schedule_text}"
+                    text = f"{header}\n\n✅ <b>{status_msg}</b>{footer}"
+                elif schedule_data:
+                    # Збираємо рядки графіку для конкретної мови користувача
+                    lines_text = []
+                    for sl in schedule_data:
+                        lines_text.append(f'<tg-emoji emoji-id="6019346268197759615">🔌</tg-emoji> {sl["off"]} - {sl["on"]} ({sl["hours"]} {h_unit})')
+                    
+                    schedule_block = "\n".join(lines_text)
+                    
+                    text = (
+                        f"{header}\n\n"
+                        f"{outages_title}\n{schedule_block}\n\n"
+                        f"{stats_title}\n"
+                        f"{on_label} {fmt_on} {h_unit}\n"
+                        f"{off_label} {fmt_off} {h_unit}"
+                        f"{footer}"
+                    )
                 else:
-                    text = header
+                    text = header + footer
                     
                 try:
-                    await bot.send_message(user['user_id'], text, parse_mode="HTML")
+                    await bot.send_message(
+                        user['user_id'], 
+                        text, 
+                        parse_mode="HTML", 
+                        disable_web_page_preview=True
+                    )
                 except Exception:
                     pass
 
@@ -368,6 +439,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
