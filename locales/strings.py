@@ -26,7 +26,6 @@ TEXTS = {
         'empty_list': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Список підписок порожній.',
         'support_text': '<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>Підтримка:</b> {user}\n<tg-emoji emoji-id="5987880246865565644">💰</tg-emoji> <b>Донат:</b> {url}\n<tg-emoji emoji-id="5771868281212245617">📢</tg-emoji> <b>Наш канал (FAQ, тех. підтримка)</b>: https://t.me/lightmetech',
         'tech_work': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> <b>Технічні роботи</b>\nБот тимчасово недоступний. Спробуйте пізніше.\nСлідкуйте за новинами бота на нашому каналі @lightmetech',
-        'update_notify': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> <b>Оновлення графіку!</b>\nЗавантажено новий графік для {company} {queue} на {date}.',
         'settings_text': '<tg-emoji emoji-id="5258096772776991776">⚙</tg-emoji> Налаштування:',
         'btn_lang_switch': '🇺🇦/🇷🇺 Змінити мову',
         'reminder_off': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Нагадування: очікуване вимкнення світла в черзі {company} {queue} через 10 хв.',
@@ -113,6 +112,14 @@ TEXTS = {
         'no_outages_today': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Світло не вимикатимуть!</b>',
         'updated': '<tg-emoji emoji-id="5900104897885376843">🕓</tg-emoji> Оновлення',
         'schedule_title': '<b>Графік {company} {queue} на {date}</b>'
+
+        'update_notify': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> <b>Оновлення графіку {company} {queue} на {date}:</b>',
+        'notify_outages_title': '<tg-emoji emoji-id="5978809241576673582">✅</tg-emoji> <b>Відключення:</b>',
+        'notify_stats_title': '<tg-emoji emoji-id="5875291072225087249">📊</tg-emoji> <b>Статистика:</b>',
+        'notify_on_label': '<tg-emoji emoji-id="5845677551892042113">⚡️</tg-emoji> <b>Зі світлом:</b>',
+        'notify_off_label': '<tg-emoji emoji-id="5258084811293102719">⚡️</tg-emoji> <b>Без світла:</b>',
+        'monitor_link': '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot"><b>Монітор світла</b></a>',
+        'hour_short_dot': 'год.',
     },
     'ru': {
         'select_lang': '<tg-emoji emoji-id="5449408995691341691">🇷🇺</tg-emoji> Пожалуйста, выберите язык:',
@@ -141,7 +148,6 @@ TEXTS = {
         'empty_list': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Список подписок пуст.',
         'support_text': '<tg-emoji emoji-id="5988023995125993550">🛠</tg-emoji> <b>Поддержка:</b> {user}\n<tg-emoji emoji-id="5987880246865565644">💰</tg-emoji> <b>Донат:</b> {url}\n<tg-emoji emoji-id="5771868281212245617">📢</tg-emoji> <b>Наш канал (FAQ, тех. поддержка)</b>: https://t.me/lightmetech',
         'tech_work': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> <b>Технические работы</b>\nБот временно недоступен. Попробуйте позже.\nСледите за обновлениями бота на нашем канале @lightmetech',
-        'update_notify': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> <b>Обновление графика!</b>\nЗагружен новый график для {company} {queue} на {date}.',
         'settings_text': '<tg-emoji emoji-id="5258096772776991776">⚙</tg-emoji> Настройки:',
         'btn_lang_switch': '🇺🇦/🇷🇺 Сменить язык',
         'reminder_off': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> Напоминание: ожидаемое отключение света в очереди {company} {queue} через 10 минут.',
@@ -228,12 +234,21 @@ TEXTS = {
         'no_outages_today': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Свет не будут выключать!</b>',
         'updated': '<tg-emoji emoji-id="5900104897885376843">🕓</tg-emoji> Обновление',
         'schedule_title': '<b>График {company} {queue} на {date}</b>'
+
+        'update_notify': '<tg-emoji emoji-id="5909201569898827582">🔔</tg-emoji> <b>Обновление графика {company} {queue} на {date}:</b>',
+        'notify_outages_title': '<tg-emoji emoji-id="5978809241576673582">✅</tg-emoji> <b>Отключения:</b>',
+        'notify_stats_title': '<tg-emoji emoji-id="5875291072225087249">📊</tg-emoji> <b>Статистика:</b>',
+        'notify_on_label': '<tg-emoji emoji-id="5845677551892042113">⚡️</tg-emoji> <b>Со светом:</b>',
+        'notify_off_label': '<tg-emoji emoji-id="5258084811293102719">⚡️</tg-emoji> <b>Без света:</b>',
+        'monitor_link': '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot"><b>Монитор света</b></a>',
+        'hour_short_dot': 'ч.',
     }
 }
 
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
