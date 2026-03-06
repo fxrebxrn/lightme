@@ -95,7 +95,7 @@ TEXTS = {
         'cmp_delete_saved': '❌ Видалити порівняння',
         'cmp_no_data': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> На жаль, графік на черги ще не завантажено.',
         'cmp_limit_reached': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Ви досягли ліміту збережених порівнянь 5/5. Видаліть старі, щоб зберегти нову.',
-        'no_outages': 'Світло не вимикатимуть!',
+        'no_outages': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Світло не вимикатимуть!</b>',
         'schedule_hours_value': '{value} год.',
         'schedule_view_no_data': '<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}',
        
@@ -217,7 +217,7 @@ TEXTS = {
         'cmp_delete_saved': '❌ Удалить сравнение',
         'cmp_no_data': '<tg-emoji emoji-id="5258503720928288433">ℹ️</tg-emoji> К сожелению, график на очереди еще не загружен.',
         'cmp_limit_reached': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Вы достигли лимита сохранённых сравнений 5/5. Удалите старые, чтобы сохранить новое.',
-        'no_outages': 'Отключений не будет!',
+        'no_outages': '<tg-emoji emoji-id="5021905410089550576">✅</tg-emoji> <b>Свет не будут выключать!</b>',
         'schedule_hours_value': '{value} ч.',
         'schedule_view_no_data': '<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> <b>График {company} {queue} на {date}:</b>\n\n{schedule}',
 
@@ -248,6 +248,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
