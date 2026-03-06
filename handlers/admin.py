@@ -297,7 +297,7 @@ async def notify_users_about_update(bot, company, date_str, results):
                 
                 if is_no_outages:
                     status_msg = get_text(lang, 'no_outages') 
-                    text = f"{header}\n\n✅ <b>{status_msg}</b>{footer}"
+                    text = f"{header}\n\n<b>{status_msg}</b>\n\n{footer}"
                 elif schedule_data:
                     # Збираємо рядки графіку для конкретної мови користувача
                     lines_text = []
@@ -439,6 +439,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
