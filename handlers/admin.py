@@ -312,7 +312,7 @@ async def notify_users_about_update(bot, company, date_str, results):
                         f"{stats_title}\n"
                         f"{on_label} {fmt_on} {h_unit}\n"
                         f"{off_label} {fmt_off} {h_unit}"
-                        f"{footer}"
+                        f"\n\n{footer}"
                     )
                 else:
                     text = header + footer
@@ -439,6 +439,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
