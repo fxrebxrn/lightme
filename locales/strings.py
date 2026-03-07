@@ -120,6 +120,8 @@ TEXTS = {
         'notify_off_label': '<tg-emoji emoji-id="5258084811293102719">⚡️</tg-emoji> <b>Без світла:</b>',
         'monitor_link': '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot"><b>Монітор світла</b></a>',
         'hour_short_dot': 'год.',
+
+        'avar_warning': '<tg-emoji emoji-id="6030563507299160824">❗️</tg-emoji> Зараз діють аварійні відключення, графік може не діяти!',
     },
     'ru': {
         'select_lang': '<tg-emoji emoji-id="5449408995691341691">🇷🇺</tg-emoji> Пожалуйста, выберите язык:',
@@ -242,12 +244,15 @@ TEXTS = {
         'notify_off_label': '<tg-emoji emoji-id="5258084811293102719">⚡️</tg-emoji> <b>Без света:</b>',
         'monitor_link': '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="https://t.me/lightmeuaBot"><b>Монитор света</b></a>',
         'hour_short_dot': 'ч.',
+
+        'avar_warning': '<tg-emoji emoji-id="6030563507299160824">❗️</tg-emoji> Сейчас действуют аварийные отключения, график может не действовать!',
     }
 }
 
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
