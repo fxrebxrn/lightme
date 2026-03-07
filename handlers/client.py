@@ -744,6 +744,19 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     db_date_str = target_date_str or today_str
     display_date_str = format_display_date(db_date_str)
 
+    # --- ЗЧИТУЄМО СТАН АВАРІЙНИХ ВІДКЛЮЧЕНЬ ---
+    avaron_mode = False
+    with get_db() as conn:
+        try:
+            res = conn.execute("SELECT value FROM bot_settings WHERE key='avaron'").fetchone()
+            if res and res['value'] == '1':
+                avaron_mode = True
+        except Exception:
+            pass
+
+    avar_text = f"\n\n{get_text(lang, 'avar_warning')}" if avaron_mode else ""
+    # ------------------------------------------
+
     with get_db() as conn:
         rows = conn.execute(
             "SELECT off_time, on_time, created_at FROM schedules WHERE company=? AND queue=? AND date=?",
@@ -754,22 +767,20 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     # --- НЕТ ДАННЫХ ---
     if not rows:
-
         schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
 
-{get_text(lang,'schedule_not_loaded')}
+{get_text(lang,'schedule_not_loaded')}{avar_text}
 
 {get_text(lang,'monitor_link')}
 """
 
     # --- НЕТ ОТКЛЮЧЕНИЙ ---
     elif rows[0]['off_time'] == 'empty':
-
         updated_at = format_display_datetime(rows[0]['created_at']).replace(' ', ' о ', 1)
 
         schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
 
-{get_text(lang,'no_outages_today')}
+{get_text(lang,'no_outages_today')}{avar_text}
 
 <i>{get_text(lang,'updated')} {updated_at}</i>
 
@@ -778,7 +789,6 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     # --- ЕСТЬ ОТКЛЮЧЕНИЯ ---
     else:
-
         outage_rows = [r for r in rows if r['off_time'] != 'empty']
 
         outages = []
@@ -786,7 +796,6 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
         total_no_light_minutes = 0
 
         for row in outage_rows:
-
             off_minutes = minutes_from_str(row['off_time'])
             on_minutes = minutes_from_str(row['on_time'])
 
@@ -822,9 +831,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
         )
 
         updated_at = format_display_datetime(rows[0]['created_at']).replace(' ', ' о ', 1)
-
         now_time = now_ua.strftime("%H:%M")
-
         status_line = get_status_line(outages, now_time, lang)
 
         schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
@@ -836,7 +843,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
 {get_text(lang,'section_stats')}
 {get_text(lang,'stats_light',value=total_light)}
-{get_text(lang,'stats_no_light',value=total_no_light)}
+{get_text(lang,'stats_no_light',value=total_no_light)}{avar_text}
 
 <i>{get_text(lang,'updated')} {updated_at}</i>
 
@@ -845,7 +852,6 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     # --- КНОПКИ ---
     if db_date_str == today_str:
-
         kb.add(
             types.InlineKeyboardButton(
                 get_text(lang,'tomorrow_label'),
@@ -853,9 +859,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
                 style="primary"
             )
         )
-
     else:
-
         kb.add(
             types.InlineKeyboardButton(
                 get_text(lang,'today_label'),
@@ -1219,6 +1223,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
