@@ -127,9 +127,18 @@ def init_db():
                 status INTEGER DEFAULT 0
             )
         ''')
+        
+        # --- НОВА ТАБЛИЦЯ: Налаштування бота (Аварійні відключення тощо) ---
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
+        
         conn.commit()
     print(f"✅ База даних ініціалізована за шляхом: {DB_PATH}")
-
+    
 def get_stats():
     with get_db() as conn:
         # Рахуємо загальну кількість користувачів
@@ -137,3 +146,4 @@ def get_stats():
         # Рахуємо кількість активних підписок на черги
         total_subs = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         return total_users, total_subs
+
