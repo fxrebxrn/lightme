@@ -458,6 +458,8 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+    dp.register_message_handler(admin_help, commands=['ahelp'])
+
 
 
 
