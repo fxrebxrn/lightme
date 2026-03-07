@@ -13,6 +13,25 @@ import sqlite3
 import shutil
 from datetime import datetime
 
+async def admin_help(message: types.Message):
+    # Перевірка, чи це адмін (додай свій ID у config.py)
+    if message.from_user.id != config.ADMIN_ID:
+        return
+    
+    text = (
+        "<b>ADMIN CMD:</b>\n\n"
+        f"/ahelp - Это меню\n"
+        f"/stats - Статистика бота\n"
+        f"/upload КОМАНИЯ ДАТА - Загрузить график\n"
+        f"/getdb - Вытащить базу данных\n"
+        f"/news - Рассылка всем пользователям\n"
+        f"/techon - Тех. работы ВКЛ\n"
+        f"/techoff - Тех. работы ВЫКЛ\n"
+        f"/avaron - Аварийные отключения ВКЛ\n"
+        f"/avaroff - Аварийные отключения ВЫКЛ\n"
+    )
+    await message.answer(text)
+
 def format_display_date(date_str: str):
     try:
         return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
@@ -439,6 +458,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(broadcast_news, commands=['news'])
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
+
 
 
 
