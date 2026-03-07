@@ -13,6 +13,31 @@ import sqlite3
 import shutil
 from datetime import datetime
 
+async def cmd_avaron(message: types.Message):
+    if message.from_user.id != config.ADMIN_ID: 
+        return
+    with get_db() as conn:
+        # Перевіряємо чи є такий ключ, щоб не було помилок
+        check = conn.execute("SELECT key FROM bot_settings WHERE key='avaron'").fetchone()
+        if check:
+            conn.execute("UPDATE bot_settings SET value='1' WHERE key='avaron'")
+        else:
+            conn.execute("INSERT INTO bot_settings (key, value) VALUES ('avaron', '1')")
+        conn.commit()
+    await message.answer("❗️ Режим Аварійних відключень: УВІМКНЕНО")
+
+async def cmd_avaroff(message: types.Message):
+    if message.from_user.id != config.ADMIN_ID: 
+        return
+    with get_db() as conn:
+        check = conn.execute("SELECT key FROM bot_settings WHERE key='avaron'").fetchone()
+        if check:
+            conn.execute("UPDATE bot_settings SET value='0' WHERE key='avaron'")
+        else:
+            conn.execute("INSERT INTO bot_settings (key, value) VALUES ('avaron', '0')")
+        conn.commit()
+    await message.answer("✅ Режим Аварійних відключень: ВИМКНЕНО")
+
 async def admin_help(message: types.Message):
     # Перевірка, чи це адмін (додай свій ID у config.py)
     if message.from_user.id != config.ADMIN_ID:
@@ -459,6 +484,9 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(download_db, commands=['getdb'])
     dp.register_message_handler(upload_db_via_bot, content_types=['document'])
     dp.register_message_handler(admin_help, commands=['ahelp'])
+    dp.register_message_handler(cmd_avaron, commands=['avaron'])
+    dp.register_message_handler(cmd_avaroff, commands=['avaroff'])
+
 
 
 
