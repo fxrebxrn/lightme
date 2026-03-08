@@ -625,41 +625,33 @@ async def view_schedules_start(call_or_msg):
     # Створюємо клавіатуру
     kb = types.InlineKeyboardMarkup(row_width=2)
     
-    # 1. Основні кнопки компаній
-    # (Перевір, щоб callback_data співпадали з твоїми, зазвичай це "vcomp_ДТЕК" та "vcomp_ЦЕК")
+    # Основні кнопки компаній
     btn_dtek = types.InlineKeyboardButton("ДТЕК", callback_data="vcomp_ДТЕК")
     btn_cek = types.InlineKeyboardButton("ЦЕК", callback_data="vcomp_ЦЕК")
     kb.row(btn_dtek, btn_cek)
     
-    # 2. Отримуємо підписки користувача з БД
+    # Отримуємо підписки користувача з БД
     with get_db() as conn:
         subs = conn.execute("SELECT company, queue FROM users WHERE user_id=?", (user_id,)).fetchall()
     
-    # 3. Додаємо кнопки підписок, якщо вони є
+    # Додаємо кнопки підписок, якщо вони є
     if subs:
-        # Дата на сьогодні для відображення графіка
         now_ua = datetime.now(UA_TZ)
         today_str = now_ua.strftime('%Y-%m-%d')
-        
-        # Можна додати візуальний роздільник (необов'язково, але красиво)
-        # kb.add(types.InlineKeyboardButton("👇 Твої збережені черги:", callback_data="ignore"))
         
         for sub in subs:
             comp = sub['company']
             q = sub['queue']
-            # Формуємо callback_data точно так само, як це працює в загальному списку черг
+            # Прибрали глазик
             kb.add(
                 types.InlineKeyboardButton(
-                    f"👁 {comp} {q}", 
+                    f"{comp} {q}", 
                     callback_data=cb_sched.new(comp=comp, queue=q, date=today_str)
                 )
             )
 
-    # Кнопка назад у головне меню
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="main_menu"))
-
-    # Текст повідомлення
-    text = get_text(lang, 'select_company') # Або будь-який інший ключ для "Оберіть компанію"
+    # Текст повідомлення (використовуємо правильний ключ 'choose_comp')
+    text = get_text(lang, 'choose_comp')
 
     # Відправляємо або редагуємо повідомлення
     if isinstance(call_or_msg, types.CallbackQuery):
@@ -688,11 +680,33 @@ async def back_to_comp(call: types.CallbackQuery):
     lang = get_user_lang(call.from_user.id)
     is_view = "view" in call.data
     prefix = "vcomp_" if is_view else "scomp_"
-    kb = types.InlineKeyboardMarkup().add(
-        types.InlineKeyboardButton("ДТЕК", callback_data=f"{prefix}ДТЕК", style="primary"),
-        types.InlineKeyboardButton("ЦЕК", callback_data=f"{prefix}ЦЕК", style="primary")
+    
+    kb = types.InlineKeyboardMarkup(row_width=2)
+    kb.row(
+        types.InlineKeyboardButton("ДТЕК", callback_data=f"{prefix}ДТЕК"),
+        types.InlineKeyboardButton("ЦЕК", callback_data=f"{prefix}ЦЕК")
     )
-    await call.message.edit_text(get_text(lang, 'choose_comp'), reply_markup=kb)
+
+    # Якщо це повернення в меню ПЕРЕГЛЯДУ графіків, додаємо підписки
+    if is_view:
+        with get_db() as conn:
+            subs = conn.execute("SELECT company, queue FROM users WHERE user_id=?", (call.from_user.id,)).fetchall()
+        
+        if subs:
+            now_ua = datetime.now(UA_TZ)
+            today_str = now_ua.strftime('%Y-%m-%d')
+            
+            for sub in subs:
+                comp = sub['company']
+                q = sub['queue']
+                kb.add(
+                    types.InlineKeyboardButton(
+                        f"{comp} {q}", 
+                        callback_data=cb_sched.new(comp=comp, queue=q, date=today_str)
+                    )
+                )
+
+    await call.message.edit_text(get_text(lang, 'choose_comp'), reply_markup=kb, parse_mode="HTML")
     await call.answer()
 
 async def save_sub(call: types.CallbackQuery, callback_data: dict, scheduler):
@@ -1275,6 +1289,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
