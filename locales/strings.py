@@ -86,7 +86,7 @@ TEXTS = {
         'cmp_result_header': '<tg-emoji emoji-id="5258216851472654189">💡</tg-emoji> Спільне ввімкнення для {comp1} {queue1} та {comp2} {queue2} на {date}:',
         'cmp_no_common': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Спільних інтервалів увімкнення для {comp1} {queue1} та {comp2} {queue2} на {date} не знайдено.',
         'cmp_error_restart': '<tg-emoji emoji-id="5258474669769497337">❗️</tg-emoji> Помилка стану. Будь ласка, перезапустіть вибір: натисніть ще раз Нова порівняння.',
-        'cmp_details_button': '🗓 Графікі',
+        'cmp_details_button': '🗓 Графіки',
         'cmp_details_header': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> Ввімкнення {comp1} {queue1} та {comp2} {queue2} на {date}:',
         'cmp_original_1': '<tg-emoji emoji-id="5382322671679708881">1️⃣</tg-emoji> {comp} {queue}:',
         'cmp_original_2': '<tg-emoji emoji-id="5382322671679708881">1️⃣</tg-emoji> {comp} {queue}:',
@@ -252,6 +252,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
