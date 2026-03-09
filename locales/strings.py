@@ -100,7 +100,7 @@ TEXTS = {
         'schedule_view_no_data': '<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> <b>Графік {company} {queue} на {date}:</b>\n\n{schedule}',
        
         'status_light_until': '<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> світло є до <b>{time}</b> <i>(ще {remain})</i>',
-        'status_no_light_until': '<tg-emoji emoji-id="5280863578369311403">🔴</tg-emoji> <b>Статус:</b> світла немає до <b>{time}</b> <i>(ще {remain})</i>',
+        'status_no_light_until': '<tg-emoji emoji-id="5280474686260527507">🔴</tg-emoji> <b>Статус:</b> світла немає до <b>{time}</b> <i>(ще {remain})</i>',
         'status_light_now': '<tg-emoji emoji-id="5280863578369311403">🟢</tg-emoji> <b>Статус:</b> світло є',
         'section_outages': '<tg-emoji emoji-id="5978809241576673582">✅</tg-emoji> <b>Відключення:</b>',
         'section_stats': '<tg-emoji emoji-id="5875291072225087249">📊</tg-emoji> <b>Статистика:</b>',
@@ -252,6 +252,7 @@ TEXTS = {
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
