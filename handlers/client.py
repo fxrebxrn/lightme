@@ -198,38 +198,46 @@ def queues_kb_for_compare(company, lang, phase):
 # --- Обработчики сравнения ---
 async def compare_menu(message: types.Message):
     lang = get_user_lang(message.from_user.id)
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(get_text(lang, 'btn_compare_new'), get_text(lang, 'btn_compare_my'))
-    kb.row(get_text(lang, 'back'))
+    # Змінюємо ReplyKeyboardMarkup на InlineKeyboardMarkup
+    kb = types.InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        types.InlineKeyboardButton(get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
+        types.InlineKeyboardButton(get_text(lang, 'btn_compare_my'), callback_data="cmp_start_my")
+    )
     await message.answer(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
 
-
-async def compare_new_start(message: types.Message):
-    user_id = message.from_user.id
+async def compare_new_start(call: types.CallbackQuery):
+    user_id = call.from_user.id
     COMPARE_STATE.pop(user_id, None)
     lang = get_user_lang(user_id)
     kb = types.InlineKeyboardMarkup()
     kb.add(types.InlineKeyboardButton("ДТЕК", callback_data=f"cmp_c1|ДТЕК", style="primary"),
            types.InlineKeyboardButton("ЦЕК", callback_data=f"cmp_c1|ЦЕК", style="primary"))
     kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-    await message.answer(get_text(lang, 'cmp_choose_first'), reply_markup=kb)
+    
+    # Використовуємо edit_text
+    await call.message.edit_text(get_text(lang, 'cmp_choose_first'), reply_markup=kb)
+    await call.answer()
 
 
-async def compare_my_list(message: types.Message):
-    user_id = message.from_user.id
+async def compare_my_list(call: types.CallbackQuery):
+    user_id = call.from_user.id
     lang = get_user_lang(user_id)
     rows = list_user_compares(user_id)
     kb = types.InlineKeyboardMarkup(row_width=1)
     if not rows:
-        # покажем текст и кнопку назад в compare menu
         kb2 = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-        await message.answer(get_text(lang, 'cmp_no_saved'), reply_markup=kb2)
+        await call.message.edit_text(get_text(lang, 'cmp_no_saved'), reply_markup=kb2)
+        await call.answer()
         return
     for r in rows:
         name = r['name'] or f"{r['comp1']} {r['queue1']} + {r['comp2']} {r['queue2']}"
         kb.add(types.InlineKeyboardButton(f"{name}", callback_data=f"cmp_run_saved|{r['id']}|today", style="primary"))
     kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-    await message.answer(get_text(lang, 'cmp_list_header'), reply_markup=kb)
+    
+    # Використовуємо edit_text
+    await call.message.edit_text(get_text(lang, 'cmp_list_header'), reply_markup=kb)
+    await call.answer()
 
 
 # Router for inline callbacks related to compare
@@ -238,12 +246,23 @@ async def compare_callback_router(call: types.CallbackQuery):
     user_id = call.from_user.id
     lang = get_user_lang(user_id)
 
+    # --- НОВІ ОБРОБНИКИ ДЛЯ КНОПОК МЕНЮ ---
+    if data == "cmp_start_new":
+        await compare_new_start(call)
+        return
+
+    if data == "cmp_start_my":
+        await compare_my_list(call)
+        return
+
     # Back to compare menu
     if data == "cmp_back_to_compare_menu":
-        # show compare menu (reply keyboard)
-        kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        kb.row(get_text(lang, 'btn_compare_new'), get_text(lang, 'btn_compare_my'))
-        kb.row(get_text(lang, 'back'))
+        # show compare menu (INLINE keyboard)
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        kb.add(
+            types.InlineKeyboardButton(get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
+            types.InlineKeyboardButton(get_text(lang, 'btn_compare_my'), callback_data="cmp_start_my")
+        )
         try:
             await call.message.edit_text(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
         except Exception:
@@ -1289,6 +1308,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
