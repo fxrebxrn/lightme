@@ -1,4 +1,4 @@
-from aiogram import Dispatcher, types
+ from aiogram import Dispatcher, types
 from aiogram.utils.callback_data import CallbackData
 from database.db import get_db, get_user_settings, set_user_setting
 import config
@@ -201,8 +201,8 @@ async def compare_menu(message: types.Message):
     # Змінюємо ReplyKeyboardMarkup на InlineKeyboardMarkup
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(
-        types.InlineKeyboardButton(get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
-        types.InlineKeyboardButton(get_text(lang, 'btn_compare_my'), callback_data="cmp_start_my")
+        types.InlineKeyboardButton(get_text(lang, 'btn_compare_new'), callback_data="compare_new_start"),
+        types.InlineKeyboardButton(get_text(lang, 'btn_compare_my'), callback_data="compare_my_list")
     )
     await message.answer(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
 
@@ -247,11 +247,11 @@ async def compare_callback_router(call: types.CallbackQuery):
     lang = get_user_lang(user_id)
 
     # --- НОВІ ОБРОБНИКИ ДЛЯ КНОПОК МЕНЮ ---
-    if data == "cmp_start_new":
+    if data == "compare_new_start":
         await compare_new_start(call)
         return
 
-    if data == "cmp_start_my":
+    if data == "compare_my_list":
         await compare_my_list(call)
         return
 
@@ -1308,6 +1308,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
     dp.register_message_handler(compare_menu, commands=['compare'])
   
     dp.register_inline_handler(inline_echo)
+
 
 
 
