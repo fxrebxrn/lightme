@@ -1309,6 +1309,8 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
   
     dp.register_inline_handler(inline_echo)
 
+    dp.register_callback_query_handler(compare_menu, text="compare")
+    dp.register_callback_query_handler(compare_callback_router, lambda c: c.data and c.data.startswith('cmp_'))
 
 
 
