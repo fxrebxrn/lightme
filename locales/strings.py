@@ -122,6 +122,10 @@ TEXTS = {
         'hour_short_dot': 'год.',
 
         'avar_warning': '<tg-emoji emoji-id="5276240711795107620">⚠️</tg-emoji> <b><i>Зараз діють аварійні відключення, графік може не діяти!</i></b>',
+
+        'cmp_details_header': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> Графіки {comp1} {queue1} та {comp2} {queue2} на {date}:',
+        'cmp_original_1': '<tg-emoji emoji-id="5465665476971471368">⛓️</tg-emoji> {comp} {queue}:',
+        'cmp_original_2': '<tg-emoji emoji-id="5465665476971471368">⛓️</tg-emoji> {comp} {queue}:',
     },
     'ru': {
         'select_lang': '<tg-emoji emoji-id="5449408995691341691">🇷🇺</tg-emoji> Пожалуйста, выберите язык:',
@@ -246,12 +250,17 @@ TEXTS = {
         'hour_short_dot': 'ч.',
 
         'avar_warning': '<tg-emoji emoji-id="5276240711795107620">⚠️</tg-emoji> <b><i>Сейчас действуют аварийные отключения, график может не действовать!</b></i>',
+
+        'cmp_details_header': '<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> Графики {comp1} {queue1} и {comp2} {queue2} на {date}:',
+        'cmp_original_1': '<tg-emoji emoji-id="5465665476971471368">⛓️</tg-emoji> {comp} {queue}:',
+        'cmp_original_2': '<tg-emoji emoji-id="5465665476971471368">⛓️</tg-emoji> {comp} {queue}:',
     }
 }
 
 def get_text(lang_code, key, **kwargs):
     lang = lang_code if lang_code in TEXTS else 'uk'
     return TEXTS[lang].get(key, key).format(**kwargs)
+
 
 
 
