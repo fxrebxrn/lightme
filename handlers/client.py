@@ -518,8 +518,17 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         rows2 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp2, q2, date_str)).fetchall()
 
     if not rows1 or not rows2:
-        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}", style="danger"))
-        await call.message.edit_text(get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)), reply_markup=kb)
+        kb = types.InlineKeyboardMarkup().add(
+            types.InlineKeyboardButton(
+                get_text(lang, 'back'),
+                callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}",
+                style="danger"
+            )
+        )
+        await call.message.edit_text(
+            get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
+            reply_markup=kb
+        )
         return
 
     def build_offs(rows):
@@ -562,68 +571,30 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     left = format_outages(rows1)
     right = format_outages(rows2)
 
-    header = get_text(lang, 'cmp_details_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
-    text = (
-        f"{header}\n\n"
-        f"{get_text(lang, 'cmp_original_1', comp=comp1, queue=q1)}\n{left}\n\n"
-        f"{get_text(lang, 'cmp_original_2', comp=comp2, queue=q2)}\n{right}\n\n"
-        f"{get_text(lang, 'monitor_link')}"
+    header = get_text(
+        lang,
+        'cmp_details_header',
+        comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)
     )
 
-    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}", style="danger"))
-    await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+    # Без web preview
+    monitor_line = '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="tg://resolve?domain=lightmeuaBot"><b>Монітор світла</b></a>'
 
-    def build_offs(rows):
-        offs = []
-        for r in rows:
-            try:
-                s = minutes_from_str(r['off_time'])
-                e = minutes_from_str(r['on_time'])
-                s = max(0, min(s, 1440))
-                e = max(0, min(e, 1440))
-                if e <= s:
-                    e = 1440
-                offs.append((s, e))
-            except Exception:
-                continue
-        return merge_intervals(offs)
-
-    def format_duration_with_locale(total_minutes: int) -> str:
-        hours = total_minutes // 60
-        minutes = total_minutes % 60
-        if minutes == 0:
-            return get_text(lang, 'schedule_hours_value', value=hours)
-        return f"{hours} {get_text(lang, 'units_hours')} {minutes} {get_text(lang, 'units_minutes')}"
-
-    def format_outages(rows):
-        offs = build_offs(rows)
-        if not offs:
-            return get_text(lang, 'no_outages')
-
-        lines = []
-        for s, e in offs:
-            if (s == 1439 and e == 1440) or (e - s) <= 0:
-                continue
-            lines.append(
-                f'<tg-emoji emoji-id="5258084811293102719">🔌</tg-emoji> {format_minutes(s)} - {format_minutes(e)} ({format_duration_with_locale(e - s)})'
-            )
-        return "\n".join(lines) if lines else get_text(lang, 'no_outages')
-
-    left = format_outages(rows1)
-    right = format_outages(rows2)
-
-    header = get_text(lang, 'cmp_details_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
     text = (
         f"{header}\n\n"
         f"{get_text(lang, 'cmp_original_1', comp=comp1, queue=q1)}\n{left}\n\n"
         f"{get_text(lang, 'cmp_original_2', comp=comp2, queue=q2)}\n{right}\n\n"
-        f"{get_text(lang, 'monitor_link')}"
+        f"{monitor_line}"
     )
 
     kb = types.InlineKeyboardMarkup().add(
-        types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}", style="danger")
+        types.InlineKeyboardButton(
+            get_text(lang, 'back'),
+            callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}",
+            style="danger"
+        )
     )
-    await call.message.edit_text(text, reply_markup=kb)
+    await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
     
 async def show_main_menu_msg(message: types.Message):
     lang = get_user_lang(message.from_user.id)
@@ -1376,6 +1347,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(compare_menu, text="compare")
     dp.register_callback_query_handler(compare_callback_router, lambda c: c.data and c.data.startswith('cmp_'))
+
 
 
 
