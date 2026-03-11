@@ -424,15 +424,15 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         rows1 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp1, q1, date_str)).fetchall()
         rows2 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp2, q2, date_str)).fetchall()
 
-    # If either queue has no schedule entries -> show friendly "no data" (user expects that)
     if not rows1 or not rows2:
         kb = types.InlineKeyboardMarkup()
-        # если пользователь запросил tomorrow, предложим кнопку перейти на today
         if day == 'tomorrow':
             kb.add(types.InlineKeyboardButton(get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today", style="primary"))
-        # всегда добавляем кнопку возврата в меню сравнения
         kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-        await call.message.edit_text(get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)), reply_markup=kb)
+        await call.message.edit_text(
+            get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
+            reply_markup=kb
+        )
         return
 
     def build_offs(rows):
@@ -456,42 +456,15 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     ons2 = invert_intervals(merged_offs2)
     common = intersect_intervals(ons1, ons2)
 
-    # Filter out one-minute midnight artifacts: (1439,1440)
-    common = [ (s,e) for (s,e) in common if not (s == 1439 and e == 1440) and (e - s) > 0 ]
+    common = [(s, e) for (s, e) in common if not (s == 1439 and e == 1440) and (e - s) > 0]
 
     if not common:
         kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-        await call.message.edit_text(get_text(lang, 'cmp_no_common', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)), reply_markup=kb)
+        await call.message.edit_text(
+            get_text(lang, 'cmp_no_common', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
+            reply_markup=kb
+        )
         return
-
-    def format_duration_with_locale(total_minutes: int) -> str:
-        hours = total_minutes // 60
-        minutes = total_minutes % 60
-        if minutes == 0:
-            return get_text(lang, 'schedule_hours_value', value=hours)
-        return f"{hours} {get_text(lang, 'units_hours')} {minutes} {get_text(lang, 'units_minutes')}"
-
-    # Формат вывода: совместные интервалы света + длительность
-    lines = [
-        f'<tg-emoji emoji-id="5845677551892042113">⚡️</tg-emoji> {format_minutes(s)} - {format_minutes(e)} '
-        f'({format_duration_with_locale(e - s)})'
-        for s, e in common
-    ]
-    header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
-    text = f"{header}\n\n" + "\n".join(lines) + f"\n\n{get_text(lang, 'monitor_link')}"
-
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_details_button'), callback_data=f"cmp_details|{comp1}|{q1}|{comp2}|{q2}|{day}", style="primary"))
-    other_day = 'tomorrow' if day == 'today' else 'today'
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'toggle_day_label', day=(get_text(lang, 'tomorrow_label') if other_day == 'tomorrow' else get_text(lang, 'today_label'))),
-                                       callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{other_day}", style="primary"))
-    if not saved_id:
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_save_button'), callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}", style="success"))
-    else:
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_delete_saved'), callback_data=f"cmp_del|{saved_id}", style="danger"))
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-
-    await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
 
     def format_duration_with_locale(total_minutes: int) -> str:
         hours = total_minutes // 60
@@ -505,11 +478,12 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         for s, e in common
     ]
 
-    header = get_text(
-        lang, 'cmp_result_header',
-        comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)
-    )
-    text = f"{header}\n\n" + "\n".join(lines) + f"\n\n{get_text(lang, 'monitor_link')}"
+    header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
+
+    # ВАЖНО: tg://resolve не создает web preview
+    monitor_line = '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="tg://resolve?domain=lightmeuaBot"><b>Монітор світла</b></a>'
+
+    text = f"{header}\n\n" + "\n".join(lines) + f"\n\n{monitor_line}"
 
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_details_button'), callback_data=f"cmp_details|{comp1}|{q1}|{comp2}|{q2}|{day}", style="primary"))
@@ -527,7 +501,7 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_delete_saved'), callback_data=f"cmp_del|{saved_id}", style="danger"))
     kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
 
-    await call.message.edit_text(text, reply_markup=kb)
+    await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
 
 
 # Details page (shows both original ON-intervals and marks common ones with ✅)
@@ -1402,6 +1376,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(compare_menu, text="compare")
     dp.register_callback_query_handler(compare_callback_router, lambda c: c.data and c.data.startswith('cmp_'))
+
 
 
 
