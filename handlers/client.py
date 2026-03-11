@@ -563,7 +563,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
             if (s == 1439 and e == 1440) or (e - s) <= 0:
                 continue
             lines.append(
-                f'<tg-emoji emoji-id="5258084811293102719">🔌</tg-emoji> {format_minutes(s)} - {format_minutes(e)} '
+                f'<tg-emoji emoji-id="6019346268197759615">🔌</tg-emoji> {format_minutes(s)} - {format_minutes(e)} '
                 f'<i>({format_duration_with_locale(e - s)})</i>'
             )
         return "\n".join(lines) if lines else get_text(lang, 'no_outages')
@@ -1347,6 +1347,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(compare_menu, text="compare")
     dp.register_callback_query_handler(compare_callback_router, lambda c: c.data and c.data.startswith('cmp_'))
+
 
 
 
