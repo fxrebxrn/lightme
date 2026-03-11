@@ -421,18 +421,30 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     date_str = target_date.strftime('%Y-%m-%d')
 
     with get_db() as conn:
-        rows1 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp1, q1, date_str)).fetchall()
-        rows2 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp2, q2, date_str)).fetchall()
+        rows1 = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp1, q1, date_str)
+        ).fetchall()
+        rows2 = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp2, q2, date_str)
+        ).fetchall()
 
-    # If either queue has no schedule entries -> show friendly "no data" (user expects that)
     if not rows1 or not rows2:
         kb = types.InlineKeyboardMarkup()
-        # если пользователь запросил tomorrow, предложим кнопку перейти на today
         if day == 'tomorrow':
-            kb.add(types.InlineKeyboardButton(get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today", style="primary"))
-        # всегда добавляем кнопку возврата в меню сравнения
+            kb.add(
+                types.InlineKeyboardButton(
+                    get_text(lang, 'today_label'),
+                    callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today",
+                    style="primary"
+                )
+            )
         kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-        await call.message.edit_text(get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)), reply_markup=kb)
+        await call.message.edit_text(
+            get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
+            reply_markup=kb
+        )
         return
 
     def build_offs(rows):
@@ -456,24 +468,46 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     ons2 = invert_intervals(merged_offs2)
     common = intersect_intervals(ons1, ons2)
 
-    # Filter out one-minute midnight artifacts: (1439,1440)
-    common = [ (s,e) for (s,e) in common if not (s == 1439 and e == 1440) and (e - s) > 0 ]
+    common = [(s, e) for (s, e) in common if not (s == 1439 and e == 1440) and (e - s) > 0]
 
     if not common:
-        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
-        await call.message.edit_text(get_text(lang, 'cmp_no_common', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)), reply_markup=kb)
+        kb = types.InlineKeyboardMarkup().add(
+            types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger")
+        )
+        await call.message.edit_text(
+            get_text(lang, 'cmp_no_common', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
+            reply_markup=kb
+        )
         return
 
-    # Формат вывода: строки с эмодзи
-    lines = [f'<tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {format_minutes(e)}' for s, e in common]
-    header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
-    text = f"{header}\n\n" + "\n".join(lines)
+    def format_duration_with_locale(total_minutes: int) -> str:
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+        if minutes == 0:
+            return get_text(lang, 'schedule_hours_value', value=hours)
+        return f"{hours} {get_text(lang, 'units_hours')} {minutes} {get_text(lang, 'units_minutes')}"
+
+    lines = [
+        f'<tg-emoji emoji-id="5845677551892042113">⚡️</tg-emoji> {format_minutes(s)} - {format_minutes(e)} ({format_duration_with_locale(e - s)})'
+        for s, e in common
+    ]
+
+    header = get_text(
+        lang, 'cmp_result_header',
+        comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)
+    )
+    text = f"{header}\n\n" + "\n".join(lines) + f"\n\n{get_text(lang, 'monitor_link')}"
 
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_details_button'), callback_data=f"cmp_details|{comp1}|{q1}|{comp2}|{q2}|{day}", style="primary"))
     other_day = 'tomorrow' if day == 'today' else 'today'
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'toggle_day_label', day=(get_text(lang, 'tomorrow_label') if other_day == 'tomorrow' else get_text(lang, 'today_label'))),
-                                       callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{other_day}", style="primary"))
+    kb.add(
+        types.InlineKeyboardButton(
+            get_text(lang, 'toggle_day_label', day=(get_text(lang, 'tomorrow_label') if other_day == 'tomorrow' else get_text(lang, 'today_label'))),
+            callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{other_day}",
+            style="primary"
+        )
+    )
     if not saved_id:
         kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_save_button'), callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}", style="success"))
     else:
@@ -493,15 +527,26 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     date_str = target_date.strftime('%Y-%m-%d')
 
     with get_db() as conn:
-        rows1 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp1, q1, date_str)).fetchall()
-        rows2 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp2, q2, date_str)).fetchall()
+        rows1 = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp1, q1, date_str)
+        ).fetchall()
+        rows2 = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp2, q2, date_str)
+        ).fetchall()
 
     if not rows1 or not rows2:
-        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}", style="danger"))
-        await call.message.edit_text(get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)), reply_markup=kb)
+        kb = types.InlineKeyboardMarkup().add(
+            types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}", style="danger")
+        )
+        await call.message.edit_text(
+            get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
+            reply_markup=kb
+        )
         return
 
-    def build_ons(rows):
+    def build_offs(rows):
         offs = []
         for r in rows:
             try:
@@ -514,52 +559,45 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
                 offs.append((s, e))
             except Exception:
                 continue
-        merged_offs = merge_intervals(offs)
-        ons = invert_intervals(merged_offs)
-        return ons
+        return merge_intervals(offs)
 
-    ons1 = build_ons(rows1)
-    ons2 = build_ons(rows2)
-    common = intersect_intervals(ons1, ons2)
-    common = [ (s,e) for (s,e) in common if not (s == 1439 and e == 1440) and (e - s) > 0 ]
+    def format_duration_with_locale(total_minutes: int) -> str:
+        hours = total_minutes // 60
+        minutes = total_minutes % 60
+        if minutes == 0:
+            return get_text(lang, 'schedule_hours_value', value=hours)
+        return f"{hours} {get_text(lang, 'units_hours')} {minutes} {get_text(lang, 'units_minutes')}"
 
-    def mark_ons(rows, common_intervals, lang):
-        offs = []
-        for r in rows:
-            try:
-                s = minutes_from_str(r['off_time'])
-                e = minutes_from_str(r['on_time'])
-                s = max(0, min(s, 1440))
-                e = max(0, min(e, 1440))
-                if e <= s:
-                    e = 1440
-                offs.append((s, e))
-            except Exception:
-                continue
-    
-        merged_offs = merge_intervals(offs)
-        ons = invert_intervals(merged_offs, 1440)
-    
+    def format_outages(rows):
+        offs = build_offs(rows)
+        if not offs:
+            return get_text(lang, 'no_outages')
+
         lines = []
-        for s, e in ons:
-            is_common = any(not (e <= cs or s >= ce) for cs, ce in common_intervals)
-            prefix = "" if is_common else ""
-            lines.append(f'{prefix}<tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {format_minutes(s)} - <tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {format_minutes(e)}')
-    
-        if not lines:
-            return get_text(lang, 'no_schedule_short')
-    
-        return "\n".join(lines)
+        for s, e in offs:
+            if (s == 1439 and e == 1440) or (e - s) <= 0:
+                continue
+            lines.append(
+                f'<tg-emoji emoji-id="5258084811293102719">🔌</tg-emoji> {format_minutes(s)} - {format_minutes(e)} ({format_duration_with_locale(e - s)})'
+            )
+        return "\n".join(lines) if lines else get_text(lang, 'no_outages')
 
-    left = mark_ons(rows1, common, lang)
-    right = mark_ons(rows2, common, lang)
+    left = format_outages(rows1)
+    right = format_outages(rows2)
 
     header = get_text(lang, 'cmp_details_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
-    text = f"{header}\n\n{get_text(lang, 'cmp_original_1', comp=comp1, queue=q1)}\n{left}\n\n{get_text(lang, 'cmp_original_2', comp=comp2, queue=q2)}\n{right}"
+    text = (
+        f"{header}\n\n"
+        f"{get_text(lang, 'cmp_original_1', comp=comp1, queue=q1)}\n{left}\n\n"
+        f"{get_text(lang, 'cmp_original_2', comp=comp2, queue=q2)}\n{right}\n\n"
+        f"{get_text(lang, 'monitor_link')}"
+    )
 
-    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}", style="danger"))
+    kb = types.InlineKeyboardMarkup().add(
+        types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}", style="danger")
+    )
     await call.message.edit_text(text, reply_markup=kb)
-
+    
 async def show_main_menu_msg(message: types.Message):
     lang = get_user_lang(message.from_user.id)
     try:
@@ -1311,6 +1349,7 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(compare_menu, text="compare")
     dp.register_callback_query_handler(compare_callback_router, lambda c: c.data and c.data.startswith('cmp_'))
+
 
 
 
