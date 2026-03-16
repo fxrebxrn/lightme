@@ -12,11 +12,91 @@ import tempfile
 import sqlite3
 import shutil
 from datetime import datetime
+import pytz
 
-# Сделаем команду для админа /scas ДТЕК/ЦЕК ДАТА (ДД.ММ.ГГГГ), если просто /scas ДАТА, то будет для всех компаний, если просто /scas, то будет для всех компаний и на сегодняшнюю дату.
-# Важно, чтобы дата была в формате ДД.ММ.ГГГГ, иначе будет ошибка. И после загрузки будет отправляться уведомление пользователям, у которых есть подписка на эту компанию и дату. 
-# При использовании этой команды все графики на эту дату для этой компании будут удалены и заменены на 'empty'. 
-# То есть, при исползовании этой команды, мы фактически говорим боту, что на эту дату для этой компании нет отключений "empty" в базе данных
+UA_TZ = pytz.timezone('Europe/Kyiv')
+
+def format_display_date(date_str: str):
+    try:
+        return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
+    except Exception:
+        return date_str
+    
+now = datetime.now(UA_TZ)
+today_str = now.strftime('%d.%m.%Y')
+
+async def admin_set_empty_schedule(message: types.Message):
+    if message.from_user.id != config.ADMIN_ID: 
+        return
+    
+    args = message.get_args().split()
+    company = None
+    target_date_str = None
+    
+    # --- 1. Разбор аргументов ---
+    if len(args) == 0:
+        # Просто /scas -> Все компании на сегодня
+        target_date_str = datetime.now(UA_TZ).strftime('%d.%m.%Y')
+    elif len(args) == 1:
+        # Передано 1 слово: это может быть компания ИЛИ дата
+        arg = args[0].upper()
+        if arg in ["ДТЕК", "ЦЕК"]:
+            # /scas ДТЕК -> Конкретная компания на СЕГОДНЯ
+            company = arg
+            target_date_str = today_str
+        else:
+            # /scas 12.03.2026 -> Все компании на эту дату
+            target_date_str = arg
+    elif len(args) >= 2:
+        # /scas ДТЕК 12.03.2026 -> Конкретная компания на дату
+        company = args[0].upper()
+        target_date_str = args[1]
+        
+        if company not in ["ДТЕК", "ЦЕК"]:
+            await message.answer("❌ Помилка: компанія має бути ДТЕК або ЦЕК.")
+            return
+
+    # --- 2. Проверка формата даты ---
+    try:
+        parsed_date = datetime.strptime(target_date_str, '%d.%m.%Y')
+        # База данных скорее всего использует формат YYYY-MM-DD
+        db_date = parsed_date.strftime('%Y-%m-%d') 
+    except ValueError:
+        await message.answer("❌ Помилка: дата має бути у форматі ДД.ММ.ГГГГ (наприклад, 12.03.2026)")
+        return
+
+    companies_to_update = [company] if company else ["ДТЕК", "ЦЕК"]
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    notified_users = set() # Сет, чтобы не отправить одному юзеру дважды
+    
+    # --- 3. Обновление БД и сбор пользователей ---
+    for comp in companies_to_update:
+        # Устанавливаем empty в таблицу с расписаниями
+        # ВНИМАНИЕ: Проверь, как у тебя называются колонки в таблице расписаний!
+        # Здесь предполагается таблица schedules с колонками company, date, schedule_data
+        cursor.execute('''
+            UPDATE schedules 
+            SET schedule_data = 'empty' 
+            WHERE company = ? AND date = ?
+        ''', (comp, db_date))
+        
+        # Ищем пользователей, у которых есть подписка на эту компанию
+        # ВНИМАНИЕ: Проверь название своей таблицы подписок (subscriptions или user_queues и т.д.)
+        cursor.execute('''
+            SELECT DISTINCT user_id 
+            FROM subscriptions 
+            WHERE company = ?
+        ''', (comp,))
+        
+        users = cursor.fetchall()
+                    
+    conn.commit()
+    
+    comps_str = ", ".join(companies_to_update)
+    await message.answer(f"✅ Готово!\nГрафіки для <b>{comps_str}</b> на <b>{target_date_str}</b> замінені на 'empty'.\n\n📢 Сповіщено користувачів: {len(notified_users)}", parse_mode='HTML')
 
 async def cmd_avaron(message: types.Message):
     if message.from_user.id != config.ADMIN_ID: 
@@ -61,12 +141,6 @@ async def admin_help(message: types.Message):
         f"/avaroff - Аварийные отключения ВЫКЛ\n"
     )
     await message.answer(text)
-
-def format_display_date(date_str: str):
-    try:
-        return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
-    except Exception:
-        return date_str
         
 async def download_db(message: types.Message):
     if message.from_user.id != config.ADMIN_ID:
