@@ -565,7 +565,7 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(admin_help, commands=['ahelp'])
     dp.register_message_handler(cmd_avaron, commands=['avaron'])
     dp.register_message_handler(cmd_avaroff, commands=['avaroff'])
-
+    dp.register_message_handler(admin_set_empty_schedule, commands=['scas'])
 
 
 
