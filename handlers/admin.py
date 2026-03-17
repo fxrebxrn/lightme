@@ -478,12 +478,21 @@ async def upload_schedule(message: types.Message, scheduler):
             
             parts = header.split()
             companies_raw = parts[0].upper()  # "ЦЕК/ДТЕК"
-            date_str = parts[1]
+            date_input = parts[1]
+
+            # 🔥 ПРИВОДИМ ДАТУ К ФОРМАТУ БД
+            parsed_date = datetime.strptime(date_input, '%d.%m.%Y')
+            date_str = parsed_date.strftime('%Y-%m-%d')
 
             companies = companies_raw.split("/")  # ["ЦЕК", "ДТЕК"]
 
             with get_db() as conn:
                 for company in companies:
+                    company = company.strip()
+
+                    if company not in ["ДТЕК", "ЦЕК"]:
+                        continue
+
                     # удаляем старое
                     conn.execute(
                         "DELETE FROM schedules WHERE company = ? AND date = ?",
@@ -511,7 +520,7 @@ async def upload_schedule(message: types.Message, scheduler):
             return
 
         except Exception as e:
-            return await message.answer(f"❌ Помилка обробки empty: {e}")
+            return await message.answer(f"❌ Помилка empty: {e}")
 
     company, date_str, data = parse_schedule_text(raw_text)
     
