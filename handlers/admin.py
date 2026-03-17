@@ -1,7 +1,7 @@
 from aiogram import Dispatcher, types
 from config import ADMIN_ID
 from services.parser import parse_schedule_text
-from database.db import get_db
+from database.db import get_db, get_user_settings, set_user_setting
 from services.scheduler import rebuild_jobs
 from locales.strings import get_text
 import asyncio
@@ -24,79 +24,6 @@ def format_display_date(date_str: str):
     
 now = datetime.now(UA_TZ)
 today_str = now.strftime('%d.%m.%Y')
-
-async def admin_set_empty_schedule(message: types.Message):
-    if message.from_user.id != config.ADMIN_ID: 
-        return
-    
-    args = message.get_args().split()
-    company = None
-    target_date_str = None
-    
-    # --- 1. Разбор аргументов ---
-    if len(args) == 0:
-        # Просто /scas -> Все компании на сегодня
-        target_date_str = datetime.now(UA_TZ).strftime('%d.%m.%Y')
-    elif len(args) == 1:
-        # Передано 1 слово: это может быть компания ИЛИ дата
-        arg = args[0].upper()
-        if arg in ["ДТЕК", "ЦЕК"]:
-            # /scas ДТЕК -> Конкретная компания на СЕГОДНЯ
-            company = arg
-            target_date_str = today_str
-        else:
-            # /scas 12.03.2026 -> Все компании на эту дату
-            target_date_str = arg
-    elif len(args) >= 2:
-        # /scas ДТЕК 12.03.2026 -> Конкретная компания на дату
-        company = args[0].upper()
-        target_date_str = args[1]
-        
-        if company not in ["ДТЕК", "ЦЕК"]:
-            await message.answer("❌ Помилка: компанія має бути ДТЕК або ЦЕК.")
-            return
-
-    # --- 2. Проверка формата даты ---
-    try:
-        parsed_date = datetime.strptime(target_date_str, '%d.%m.%Y')
-        # База данных скорее всего использует формат YYYY-MM-DD
-        db_date = parsed_date.strftime('%Y-%m-%d') 
-    except ValueError:
-        await message.answer("❌ Помилка: дата має бути у форматі ДД.ММ.ГГГГ (наприклад, 12.03.2026)")
-        return
-
-    companies_to_update = [company] if company else ["ДТЕК", "ЦЕК"]
-    
-    conn = get_db()
-    cursor = conn.cursor()
-    
-    notified_users = set() # Сет, чтобы не отправить одному юзеру дважды
-    
-    # --- 3. Обновление БД и сбор пользователей ---
-    for comp in companies_to_update:
-        # Устанавливаем empty в таблицу с расписаниями
-        # ВНИМАНИЕ: Проверь, как у тебя называются колонки в таблице расписаний!
-        # Здесь предполагается таблица schedules с колонками company, date, schedule_data
-        cursor.execute('''
-            UPDATE schedules 
-            SET schedule_data = 'empty' 
-            WHERE company = ? AND date = ?
-        ''', (comp, db_date))
-        
-        # Ищем пользователей, у которых есть подписка на эту компанию
-        # ВНИМАНИЕ: Проверь название своей таблицы подписок (subscriptions или user_queues и т.д.)
-        cursor.execute('''
-            SELECT DISTINCT user_id 
-            FROM subscriptions 
-            WHERE company = ?
-        ''', (comp,))
-        
-        users = cursor.fetchall()
-                    
-    conn.commit()
-    
-    comps_str = ", ".join(companies_to_update)
-    await message.answer(f"✅ Готово!\nГрафіки для <b>{comps_str}</b> на <b>{target_date_str}</b> замінені на 'empty'.\n\n📢 Сповіщено користувачів: {len(notified_users)}", parse_mode='HTML')
 
 async def cmd_avaron(message: types.Message):
     if message.from_user.id != config.ADMIN_ID: 
@@ -467,92 +394,115 @@ async def cmd_tech_off(message: types.Message):
 
 async def upload_schedule(message: types.Message, scheduler):
     if message.from_user.id != ADMIN_ID: return
-    raw_text = message.text.replace('/upload', '').strip()
     
+    raw_text = message.text.replace('/upload', '').strip()
+    is_cancel_mode = raw_text.endswith('-')
+    
+    # 1. Пытаемся распарсить как обычно
     company, date_str, data = parse_schedule_text(raw_text)
     
-    if not company or not date_str:
+    # Если даты нет — это ошибка
+    if not date_str:
         return await message.answer("❌ Формат: ДТЕК 29.01.2026 ...")
-    
-    old_queues = {}
-    with get_db() as conn:
-        old_rows = conn.execute(
-            "SELECT queue, off_time, on_time FROM schedules WHERE company = ? AND date = ?",
-            (company, date_str)
-        ).fetchall()
-        for row in old_rows:
-            q = row['queue']
-            if q not in old_queues:
-                old_queues[q] = []
-            old_queues[q].append((row['off_time'], row['on_time']))
 
-    for q in old_queues:
-        old_queues[q] = sorted(old_queues[q])
+    # 2. ОПРЕДЕЛЯЕМ СПИСОК КОМПАНИЙ
+    # Если введено "/upload 27.03.2026 -" (без названия компании)
+    if is_cancel_mode and not company:
+        companies_to_process = ["ЦЕК", "ДТЕК"]
+    else:
+        companies_to_process = [company]
 
-    new_queues = {}
-    for item in data:
-        q = item['queue']
-        if q not in new_queues:
-            new_queues[q] = []
-        # Замінюємо мінус на empty для порівняння
-        off_cmp = 'empty' if item['off_time'] == '-' else item['off_time']
-        on_cmp = 'empty' if item['on_time'] == '-' else item['on_time']
-        new_queues[q].append((off_cmp, on_cmp))
+    all_results_text = []
+
+    for current_company in companies_to_process:
+        current_data = data
         
-    for q in new_queues:
-        new_queues[q] = sorted(new_queues[q])
+        # МАГИЯ: Если режим отмены, сами генерируем пустые данные для всех очередей
+        if is_cancel_mode:
+            current_data = []
+            for i in range(1, 7):
+                for j in [1, 2]:
+                    q_name = f"{i}.{j}"
+                    current_data.append({
+                        'company': current_company, 'date': date_str, 'queue': q_name,
+                        'off_time': '-', 'on_time': '-'
+                    })
 
-    changed_queues = set()
-    for q, new_intervals in new_queues.items():
-        old_intervals = old_queues.get(q, [])
-        if new_intervals != old_intervals:
-            changed_queues.add(q)
+        # --- ТВОЯ ОРИГИНАЛЬНАЯ ЛОГИКА СРАВНЕНИЯ ---
+        old_queues = {}
+        with get_db() as conn:
+            old_rows = conn.execute(
+                "SELECT queue, off_time, on_time FROM schedules WHERE company = ? AND date = ?",
+                (current_company, date_str)
+            ).fetchall()
+            for row in old_rows:
+                q = row['queue']
+                old_queues.setdefault(q, []).append((row['off_time'], row['on_time']))
+
+        for q in old_queues: old_queues[q] = sorted(old_queues[q])
+
+        new_queues = {}
+        for item in current_data:
+            q = item['queue']
+            new_queues.setdefault(q, [])
+            off_cmp = 'empty' if item['off_time'] == '-' else item['off_time']
+            on_cmp = 'empty' if item['on_time'] == '-' else item['on_time']
+            new_queues[q].append((off_cmp, on_cmp))
             
-    if not changed_queues and old_queues:
-        return await message.answer(f"✅ Графік {company} на {format_display_date(date_str)} <b>не змінився</b>. Розсилку скасовано.", parse_mode="HTML")
+        for q in new_queues: new_queues[q] = sorted(new_queues[q])
 
-    with get_db() as conn:
-        conn.execute("DELETE FROM schedules WHERE company = ? AND date = ?", (company, date_str))
-        for item in data:
-            # ЗДЕСЬ МАГІЯ: Якщо прочерк, пишемо 'empty'
-            off_val = 'empty' if item['off_time'] == '-' else item['off_time']
-            on_val = 'empty' if item['on_time'] == '-' else item['on_time']
+        changed_queues = set()
+        for q, new_intervals in new_queues.items():
+            old_intervals = old_queues.get(q, [])
+            if new_intervals != old_intervals:
+                changed_queues.add(q)
+                
+        if not changed_queues and old_queues:
+            all_results_text.append(f"✅ Графік {current_company} на {date_str} <b>не змінився</b>.")
+            continue
+
+        # --- СОХРАНЕНИЕ ---
+        with get_db() as conn:
+            conn.execute("DELETE FROM schedules WHERE company = ? AND date = ?", (current_company, date_str))
+            for item in current_data:
+                off_val = 'empty' if item['off_time'] == '-' else item['off_time']
+                on_val = 'empty' if item['on_time'] == '-' else item['on_time']
+                conn.execute(
+                    "INSERT INTO schedules (company, queue, date, off_time, on_time) VALUES (?,?,?,?,?)",
+                    (current_company, item['queue'], date_str, off_val, on_val)
+                )
+            conn.commit()
+
+        # Рассылка (только если есть изменения)
+        changed_data = [item for item in current_data if item['queue'] in changed_queues]
+        if changed_data:
+            await notify_users_about_update(message.bot, current_company, date_str, changed_data)
+
+        # --- ТВОЕ ФОРМИРОВАНИЕ ТЕКСТА (full_text_blocks) ---
+        queues_map = {}
+        for r in current_data:
+            queues_map.setdefault(r['queue'], []).append(r)
+
+        full_text_blocks = []
+        for q, items in queues_map.items():
+            is_no_outages = any(it.get('off_time') in ['-', 'empty'] for it in items)
+            status_icon = "🔔" if q in changed_queues else "🔕 (без змін)"
             
-            conn.execute(
-                "INSERT INTO schedules (company, queue, date, off_time, on_time) VALUES (?,?,?,?,?)",
-                (item['company'], item['queue'], item['date'], off_val, on_val)
-            )
-        conn.commit()
-
-    await rebuild_jobs(message.bot, scheduler)
-    
-    changed_data = [item for item in data if item['queue'] in changed_queues]
-    
-    if changed_data:
-        await notify_users_about_update(message.bot, company, date_str, changed_data)
-
-    queues_map = {}
-    for r in data:
-        queues_map.setdefault(r['queue'], []).append(r)
-
-    full_text_blocks = []
-    for q, items in queues_map.items():
-        is_no_outages = any(it.get('off_time') in ['-', 'empty'] for it in items)
-        status_icon = "🔔" if q in changed_queues else "🔕 (без змін)"
-        
-        if is_no_outages:
-            full_text_blocks.append(f"{company} {q} {status_icon}:\n✅ Відключень немає")
-        else:
-            try:
+            if is_no_outages:
+                full_text_blocks.append(f"{current_company} {q} {status_icon}:\n✅ Відключень немає")
+            else:
                 items_sorted = sorted(items, key=lambda x: x.get('off_time', ''))
-            except Exception:
-                items_sorted = items
-            lines = [f"""<tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {it.get('off_time','').strip()} - <tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {it.get('on_time','').strip()}""" for it in items_sorted if it.get('off_time') and it.get('on_time') and it.get('off_time') not in ['-', 'empty']]
-            block = f"{company} {q} {status_icon}:\n" + "\n".join(lines) if lines else f"{company} {q} {status_icon}: (порожній графік)"
-            full_text_blocks.append(block)
+                lines = [f"🔴 {it.get('off_time','')} - 🟢 {it.get('on_time','')}" 
+                         for it in items_sorted if it.get('off_time') and it.get('off_time') not in ['-', 'empty']]
+                block = f"{current_company} {q} {status_icon}:\n" + "\n".join(lines) if lines else f"{current_company} {q} {status_icon}: (порожній)"
+                full_text_blocks.append(block)
 
-    full_schedules_text = "\n\n".join(full_text_blocks)
-    await message.answer(f"✅ {company} ({format_display_date(date_str)}) завантажено!\nРозіслано сповіщень для {len(changed_queues)} черг.\n\n{full_schedules_text}")
+        all_results_text.append(f"✅ {current_company} ({date_str}) завантажено!\n" + "\n\n".join(full_text_blocks))
+
+    # Финал
+    await rebuild_jobs(message.bot, scheduler)
+    final_resp = "\n\n" + "="*20 + "\n\n"
+    await message.answer(final_resp.join(all_results_text), parse_mode="HTML")
 
 def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(cmd_tech_on, commands=['techon'])
@@ -565,7 +515,6 @@ def register_handlers(dp: Dispatcher, scheduler):
     dp.register_message_handler(admin_help, commands=['ahelp'])
     dp.register_message_handler(cmd_avaron, commands=['avaron'])
     dp.register_message_handler(cmd_avaroff, commands=['avaroff'])
-    dp.register_message_handler(admin_set_empty_schedule, commands=['scas'])
 
 
 
