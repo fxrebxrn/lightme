@@ -25,6 +25,80 @@ def format_display_date(date_str: str):
 now = datetime.now(UA_TZ)
 today_str = now.strftime('%d.%m.%Y')
 
+<<<<<<< HEAD
+=======
+async def admin_set_empty_schedule(message: types.Message):
+    if message.from_user.id != config.ADMIN_ID: 
+        return
+    
+    args = message.get_args().split()
+    company = None
+    target_date_str = None
+    
+    # --- 1. Разбор аргументов ---
+    if len(args) == 0:
+        # Просто /scas -> Все компании на сегодня
+        target_date_str = datetime.now(UA_TZ).strftime('%d.%m.%Y')
+    elif len(args) == 1:
+        # Передано 1 слово: это может быть компания ИЛИ дата
+        arg = args[0].upper()
+        if arg in ["ДТЕК", "ЦЕК"]:
+            # /scas ДТЕК -> Конкретная компания на СЕГОДНЯ
+            company = arg
+            target_date_str = today_str
+        else:
+            # /scas 12.03.2026 -> Все компании на эту дату
+            target_date_str = arg
+    elif len(args) >= 2:
+        # /scas ДТЕК 12.03.2026 -> Конкретная компания на дату
+        company = args[0].upper()
+        target_date_str = args[1]
+        
+        if company not in ["ДТЕК", "ЦЕК"]:
+            await message.answer("❌ Помилка: компанія має бути ДТЕК або ЦЕК.")
+            return
+
+    # --- 2. Проверка формата даты ---
+    try:
+        parsed_date = datetime.strptime(target_date_str, '%d.%m.%Y')
+        # База данных скорее всего использует формат YYYY-MM-DD
+        db_date = parsed_date.strftime('%Y-%m-%d') 
+    except ValueError:
+        await message.answer("❌ Помилка: дата має бути у форматі ДД.ММ.ГГГГ (наприклад, 12.03.2026)")
+        return
+
+    companies_to_update = [company] if company else ["ДТЕК", "ЦЕК"]
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    notified_users = set() # Сет, чтобы не отправить одному юзеру дважды
+    
+    # --- 3. Обновление БД и сбор пользователей ---
+    for comp in companies_to_update:
+        # В твоей базе колонки называются off_time и on_time
+        cursor.execute('''
+            UPDATE schedules 
+            SET off_time = 'empty', on_time = 'empty'
+            WHERE company = ? AND date = ?
+        ''', (comp, db_date))
+        
+        # Проверь также таблицу пользователей для рассылки. 
+        # Если таблица называется 'users', запрос ниже верный:
+        cursor.execute('''
+            SELECT DISTINCT user_id 
+            FROM users 
+            WHERE company = ?
+        ''', (comp,))
+        
+        users = cursor.fetchall()
+                    
+    conn.commit()
+    
+    comps_str = ", ".join(companies_to_update)
+    await message.answer(f"✅ Готово!\nГрафіки для <b>{comps_str}</b> на <b>{target_date_str}</b> замінені на 'empty'.\n\n📢 Сповіщено користувачів: {len(notified_users)}", parse_mode='HTML')
+
+>>>>>>> ea8df7a521ed1761d70f056bd4d70e48b905d9ff
 async def cmd_avaron(message: types.Message):
     if message.from_user.id != config.ADMIN_ID: 
         return
