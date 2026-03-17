@@ -74,20 +74,18 @@ async def admin_set_empty_schedule(message: types.Message):
     
     # --- 3. Обновление БД и сбор пользователей ---
     for comp in companies_to_update:
-        # Устанавливаем empty в таблицу с расписаниями
-        # ВНИМАНИЕ: Проверь, как у тебя называются колонки в таблице расписаний!
-        # Здесь предполагается таблица schedules с колонками company, date, schedule_data
+        # В твоей базе колонки называются off_time и on_time
         cursor.execute('''
             UPDATE schedules 
-            SET schedule_data = 'empty' 
+            SET off_time = 'empty', on_time = 'empty'
             WHERE company = ? AND date = ?
         ''', (comp, db_date))
         
-        # Ищем пользователей, у которых есть подписка на эту компанию
-        # ВНИМАНИЕ: Проверь название своей таблицы подписок (subscriptions или user_queues и т.д.)
+        # Проверь также таблицу пользователей для рассылки. 
+        # Если таблица называется 'users', запрос ниже верный:
         cursor.execute('''
             SELECT DISTINCT user_id 
-            FROM subscriptions 
+            FROM users 
             WHERE company = ?
         ''', (comp,))
         
