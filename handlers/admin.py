@@ -471,35 +471,41 @@ async def upload_schedule(message: types.Message, scheduler):
     
     # --- 🔥 NEW: массовый empty через "-" ---
     lines = raw_text.splitlines()
-
     if len(lines) >= 2 and lines[1].strip() == "-":
         try:
-            header = lines[0].strip()  # "ЦЕК/ДТЕК 17.03.2026"
-            
+            header = lines[0].strip()  # например "ДТЕК/ЦЕК 19.03.2026"
             parts = header.split()
-            companies_raw = parts[0].upper()  # "ЦЕК/ДТЕК"
+            companies_raw = parts[0].upper()
             date_input = parts[1]
 
-            # 🔥 ПРИВОДИМ ДАТУ К ФОРМАТУ БД
+            # Преобразуем дату
             parsed_date = datetime.strptime(date_input, '%d.%m.%Y')
             date_str = parsed_date.strftime('%Y-%m-%d')
 
-            companies = companies_raw.split("/")  # ["ЦЕК", "ДТЕК"]
+            companies = companies_raw.split("/")  # ["ДТЕК", "ЦЕК"]
 
             with get_db() as conn:
+                # Для каждой компании
                 for company in companies:
-                    company = company.strip()
-
                     if company not in ["ДТЕК", "ЦЕК"]:
                         continue
 
-                    # удаляем старое
-                    conn.execute(
-                        "DELETE FROM schedules WHERE company = ? AND date = ?",
+                    # 1️⃣ Запоминаем старые данные, чтобы знать, кому отправлять уведомления
+                    old_queues = {}
+                    old_rows = conn.execute(
+                        "SELECT queue, off_time, on_time FROM schedules WHERE company = ? AND date = ?",
                         (company, date_str)
-                    )
+                    ).fetchall()
+                    for row in old_rows:
+                        q = row['queue']
+                        if q not in old_queues:
+                            old_queues[q] = []
+                        old_queues[q].append((row['off_time'], row['on_time']))
 
-                    # вставляем empty для всех очередей
+                    # 2️⃣ Удаляем старые записи
+                    conn.execute("DELETE FROM schedules WHERE company = ? AND date = ?", (company, date_str))
+
+                    # 3️⃣ Вставляем empty для всех очередей (1.1 … 6.2)
                     for i in range(1, 7):
                         for j in range(1, 3):
                             queue = f"{i}.{j}"
@@ -508,19 +514,49 @@ async def upload_schedule(message: types.Message, scheduler):
                                 (company, queue, date_str, 'empty', 'empty')
                             )
 
-                conn.commit()
+                    conn.commit()
 
+                    # 4️⃣ Формируем новые данные для уведомлений
+                    new_data = []
+                    for i in range(1, 7):
+                        for j in range(1, 3):
+                            queue = f"{i}.{j}"
+                            new_data.append({
+                                'company': company,
+                                'queue': queue,
+                                'date': date_str,
+                                'off_time': 'empty',
+                                'on_time': 'empty'
+                            })
+
+                    # 5️⃣ Определяем, какие очереди изменились (все, у которых старые данные не совпадают с 'empty')
+                    changed_queues = set()
+                    for q in [f"{i}.{j}" for i in range(1,7) for j in range(1,3)]:
+                        old_intervals = old_queues.get(q, [])
+                        # если в старых данных не было пустых интервалов или они отличаются
+                        if not old_intervals or any(off != 'empty' or on != 'empty' for off, on in old_intervals):
+                            changed_queues.add(q)
+
+                    # 6️⃣ Если есть изменённые очереди, отправляем уведомления
+                    if changed_queues:
+                        # Фильтруем new_data только для изменённых очередей
+                        changed_data = [item for item in new_data if item['queue'] in changed_queues]
+                        await notify_users_about_update(message.bot, company, date_str, changed_data)
+
+            # Перезапускаем планировщик (как и раньше)
             await rebuild_jobs(message.bot, scheduler)
 
+            # Отвечаем админу
             await message.answer(
-                f"✅ Всі графіки для <b>{', '.join(companies)}</b> на <b>{format_display_date(date_str)}</b> встановлено як empty",
+                f"✅ Всі графіки для <b>{', '.join(companies)}</b> на <b>{format_display_date(date_str)}</b> встановлено як empty.\n"
+                f"Розіслано сповіщень для {len(changed_queues)} черг.",
                 parse_mode="HTML"
             )
 
             return
 
         except Exception as e:
-            return await message.answer(f"❌ Помилка empty: {e}")
+            return await message.answer(f"❌ Помилка при масовому empty: {e}")
 
     company, date_str, data = parse_schedule_text(raw_text)
     

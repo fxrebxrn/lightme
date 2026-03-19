@@ -1,7 +1,7 @@
 import os
 
 API_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = 6751672551  # ID Адміна
+ADMIN_ID = 6751672551
 CHANNEL_ID = '@lightmetech'
 CHANNEL_URL = 'https://t.me/lightmetech'
 SUPPORT_USER = '@imnotafire'
