@@ -614,13 +614,6 @@ def lang_kb():
            types.InlineKeyboardButton("🇷🇺 Русский", callback_data=cb_lang.new(code="ru"), style="primary"))
     return kb
 
-def main_menu_kb(lang):
-    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(get_text(lang, 'btn_add_queue'), get_text(lang, 'btn_my_queues'))
-    kb.row(get_text(lang, 'btn_schedules'), get_text(lang, 'btn_compare'))
-    kb.row(get_text(lang, 'btn_settings'), get_text(lang, 'btn_support'))
-    return kb
-
 def queues_kb(action_type, company, lang):
     queues = ["1.1", "1.2", "2.1", "2.2", "3.1", "3.2", "4.1", "4.2", "5.1", "5.2", "6.1", "6.2"]
     kb = types.InlineKeyboardMarkup(row_width=3)
@@ -886,7 +879,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
     kb = types.InlineKeyboardMarkup(row_width=1)
 
-    # --- НЕТ ДАННЫХ ---
+
     if not rows:
         schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
 
@@ -894,8 +887,7 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 
 {get_text(lang,'monitor_link')}
 """
-
-    # --- НЕТ ОТКЛЮЧЕНИЙ ---
+        
     elif rows[0]['off_time'] == 'empty':
         updated_at = format_display_datetime(rows[0]['created_at']).replace(' ', ' о ', 1)
 
@@ -908,7 +900,6 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
 {get_text(lang,'monitor_link')}
 """
 
-    # --- ЕСТЬ ОТКЛЮЧЕНИЯ ---
     else:
         outage_rows = [r for r in rows if r['off_time'] != 'empty']
 
@@ -1347,38 +1338,3 @@ def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили schedul
 
     dp.register_callback_query_handler(compare_menu, text="compare")
     dp.register_callback_query_handler(compare_callback_router, lambda c: c.data and c.data.startswith('cmp_'))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

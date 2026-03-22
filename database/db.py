@@ -146,4 +146,3 @@ def get_stats():
         # Рахуємо кількість активних підписок на черги
         total_subs = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         return total_users, total_subs
-

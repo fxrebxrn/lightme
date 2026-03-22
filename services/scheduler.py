@@ -302,5 +302,3 @@ async def rebuild_jobs(bot, scheduler):
             print(f"Global error processing schedule row: {e}")
 
     print(f"✅ Задания планировщика обновлены: {datetime.now(UA_TZ)}")
-
-
