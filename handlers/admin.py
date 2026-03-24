@@ -613,10 +613,5 @@ def register_handlers(dp, scheduler):
     router.message.register(admin_help, Command('ahelp'))
     router.message.register(cmd_avaron, Command('avaron'))
     router.message.register(cmd_avaroff, Command('avaroff'))
-<<<<<<< HEAD
     router.message.register(admin_menu, Command('amenu'))
     dp.include_router(router)
-=======
-    dp.include_router(router)
-    
->>>>>>> 99a197657e40d61fc9828d3a9fe260e32ea983a8
