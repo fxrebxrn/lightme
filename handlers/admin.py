@@ -1,5 +1,6 @@
 from aiogram import Router, types
 from aiogram.filters import Command
+from aiogram.types import FSInputFile
 from config import ADMIN_ID
 from services.parser import parse_schedule_text
 from database.db import get_db
@@ -77,9 +78,8 @@ async def download_db(message: types.Message):
     db_path = "/app/data/database.db" # Переконайся, що шлях веде до Volume
 
     if os.path.exists(db_path):
-        # Використовуємо open(), щоб правильно передати файл
-        with open(db_path, 'rb') as f:
-            await message.answer_document(f, caption="📂 База даних з Volume (/app/data)")
+        db_file = FSInputFile(db_path, filename='database.db')
+        await message.answer_document(db_file, caption="📂 База даних з Volume (/app/data)")
     else:
         try:
             content = os.listdir('/app/data')
