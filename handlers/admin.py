@@ -1,4 +1,5 @@
-from aiogram import Dispatcher, types
+from aiogram import Router, types
+from aiogram.filters import Command
 from config import ADMIN_ID
 from services.parser import parse_schedule_text
 from database.db import get_db
@@ -198,7 +199,7 @@ async def broadcast_news(message: types.Message):
         message_id_to_copy = message.reply_to_message.message_id
     else:
         # ВАРІАНТ Б: Ви просто написали текст після команди
-        text_to_send = message.get_args()
+        text_to_send = (message.text.split(maxsplit=1)[1] if message.text and len(message.text.split(maxsplit=1)) > 1 else "")
         if not text_to_send:
             await message.answer(
                 "ℹ️ <b>Як зробити розсилку:</b>\n\n"
@@ -570,14 +571,20 @@ async def upload_schedule(message: types.Message, scheduler):
     full_schedules_text = "\n\n".join(full_text_blocks)
     await message.answer(f"✅ {company} ({format_display_date(date_str)}) завантажено!\nРозіслано сповіщень для {len(changed_queues)} черг.\n\n{full_schedules_text}")
 
-def register_handlers(dp: Dispatcher, scheduler):
-    dp.register_message_handler(cmd_tech_on, commands=['techon'])
-    dp.register_message_handler(cmd_tech_off, commands=['techoff'])
-    dp.register_message_handler(lambda m: upload_schedule(m, scheduler), commands=['upload'])
-    dp.register_message_handler(admin_stats, commands=['stats'])
-    dp.register_message_handler(broadcast_news, commands=['news'])
-    dp.register_message_handler(download_db, commands=['getdb'])
-    dp.register_message_handler(upload_db_via_bot, content_types=['document'])
-    dp.register_message_handler(admin_help, commands=['ahelp'])
-    dp.register_message_handler(cmd_avaron, commands=['avaron'])
-    dp.register_message_handler(cmd_avaroff, commands=['avaroff'])
+def register_handlers(dp, scheduler):
+    router = Router(name="admin")
+
+    async def _upload_schedule_wrapper(message: types.Message):
+        await upload_schedule(message, scheduler)
+
+    router.message.register(cmd_tech_on, Command('techon'))
+    router.message.register(cmd_tech_off, Command('techoff'))
+    router.message.register(_upload_schedule_wrapper, Command('upload'))
+    router.message.register(admin_stats, Command('stats'))
+    router.message.register(broadcast_news, Command('news'))
+    router.message.register(download_db, Command('getdb'))
+    router.message.register(upload_db_via_bot, lambda m: m.document is not None)
+    router.message.register(admin_help, Command('ahelp'))
+    router.message.register(cmd_avaron, Command('avaron'))
+    router.message.register(cmd_avaroff, Command('avaroff'))
+    dp.include_router(router)

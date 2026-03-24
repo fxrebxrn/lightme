@@ -1,3 +1,4 @@
+from aiogram import Bot
 import pytz
 from datetime import datetime, timedelta
 from database.db import get_db
@@ -102,7 +103,7 @@ def get_effective_on_event(company, queue, date_obj, on_time_str):
 
     return effective_on_dt
 
-async def send_reminder(bot, user_id, company, queue, action, lang, next_event_str=None, duration_str=None, current_event_time_str=None):
+async def send_reminder(bot: Bot, user_id, company, queue, action, lang, next_event_str=None, duration_str=None, current_event_time_str=None):
     """Отправляет напоминание пользователю."""
     # action может быть: 'off'/'on' (reminder за 10 минут) или 'off_now'/'on_now' (уведомление в момент события)
     
@@ -125,7 +126,7 @@ async def send_reminder(bot, user_id, company, queue, action, lang, next_event_s
         text = get_text(lang, key, company=company, queue=queue)
 
     try:
-        await bot.send_message(user_id, text, parse_mode="HTML")
+        await bot.send_message(user_id, text)
     except Exception as e:
         print(f"Ошибка отправки напоминания {user_id}: {e}")
 
@@ -147,12 +148,9 @@ def parse_localized_datetime(date_str: str, time_str: str):
     Поддерживает '24:00' (как 00:00 следующего дня).
     """
     norm_time, day_off = normalize_time_and_offset(time_str)
-    try:
-        dt_naive = datetime.strptime(f"{date_str} {norm_time}", '%Y-%m-%d %H:%M')
-        dt = dt_naive + timedelta(days=day_off)
-        return UA_TZ.localize(dt)
-    except Exception as e:
-        raise
+    dt_naive = datetime.strptime(f"{date_str} {norm_time}", '%Y-%m-%d %H:%M')
+    dt = dt_naive + timedelta(days=day_off)
+    return UA_TZ.localize(dt)
 
 def normalized_time_key(time_str: str):
     """

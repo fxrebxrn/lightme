@@ -1,50 +1,45 @@
+import asyncio
 import os
 import time
 
-# Примусове встановлення системної часової зони для всього процесу
 os.environ['TZ'] = 'Europe/Kyiv'
 if hasattr(time, 'tzset'):
     time.tzset()
 
-import collections
-# Милиця для сумісності
-try:
-    import collections.abc
-    collections.Iterable = collections.abc.Iterable
-except ImportError:
-    pass
-
-from aiogram import Bot, Dispatcher, types
-from aiogram.utils import executor
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import config
 from database.db import init_db
-from services.scheduler import rebuild_jobs
-from handlers import client, admin
+from handlers import admin, client
 from middlewares.tech_work import TechWorkMiddleware
+from services.scheduler import rebuild_jobs
 
-# Ініціалізація
-bot = Bot(token=config.API_TOKEN, parse_mode=types.ParseMode.HTML)
-dp = Dispatcher(bot)
-scheduler = AsyncIOScheduler()
 
-# Middlewares
-dp.middleware.setup(TechWorkMiddleware())
+async def main():
+    bot = Bot(token=config.API_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    dp = Dispatcher()
+    scheduler = AsyncIOScheduler()
 
-# Реєстрація хендлерів
-admin.register_handlers(dp, scheduler)
-client.register_handlers(dp, scheduler)
+    dp.message.middleware(TechWorkMiddleware())
+    dp.callback_query.middleware(TechWorkMiddleware())
 
-async def on_startup(dispatcher):
+    admin.register_handlers(dp, scheduler)
+    client.register_handlers(dp, scheduler)
+
     print("🚀 System initializing...")
     init_db()
     await rebuild_jobs(bot, scheduler)
     scheduler.start()
     print("✅ Bot is ready & Scheduler started!")
 
+    await dp.start_polling(bot, skip_updates=True)
+
+
 if __name__ == '__main__':
-    executor.start_polling(dp, on_startup=on_startup, skip_updates=True, timeout=20)
-
-
-
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("🛑 Бот успешно остановлен!")

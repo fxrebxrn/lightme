@@ -1,5 +1,5 @@
-from aiogram import Dispatcher, types
-from aiogram.utils.callback_data import CallbackData
+from aiogram import Router, types
+from aiogram.filters import Command
 from database.db import get_db, get_user_settings, set_user_setting
 import config
 from locales.strings import get_text
@@ -8,6 +8,53 @@ from datetime import datetime, timedelta
 import pytz
 import sqlite3
 import uuid
+
+
+class CompatInlineKeyboardMarkup(types.InlineKeyboardMarkup):
+    """aiogram2-style helper for aiogram3."""
+
+    def __init__(self, row_width: int = 3, inline_keyboard=None, **kwargs):
+        super().__init__(inline_keyboard=inline_keyboard or [], **kwargs)
+        self.row_width = row_width
+
+    def add(self, *buttons):
+        if not buttons:
+            return self
+        chunk = max(int(getattr(self, "row_width", 1) or 1), 1)
+        for i in range(0, len(buttons), chunk):
+            self.inline_keyboard.append(list(buttons[i:i + chunk]))
+        return self
+
+    def row(self, *buttons):
+        if buttons:
+            self.inline_keyboard.append(list(buttons))
+        return self
+
+
+class CompatReplyKeyboardMarkup(types.ReplyKeyboardMarkup):
+    """aiogram2-style helper for aiogram3."""
+
+    def __init__(self, resize_keyboard: bool = True, row_width: int = 3, keyboard=None, **kwargs):
+        super().__init__(keyboard=keyboard or [], resize_keyboard=resize_keyboard, **kwargs)
+        self.row_width = row_width
+
+    def add(self, *buttons):
+        if not buttons:
+            return self
+        chunk = max(int(getattr(self, "row_width", 1) or 1), 1)
+        for i in range(0, len(buttons), chunk):
+            self.keyboard.append(list(buttons[i:i + chunk]))
+        return self
+
+    def row(self, *buttons):
+        if buttons:
+            self.keyboard.append(list(buttons))
+        return self
+
+
+# Backward-compatible aliases used by the rest of this file
+types.InlineKeyboardMarkup = CompatInlineKeyboardMarkup
+types.ReplyKeyboardMarkup = CompatReplyKeyboardMarkup
 
 COMPARE_STATE = {}
 # Часовой пояс Киева
@@ -27,12 +74,26 @@ def format_display_datetime(dt_str: str):
     except Exception:
         return dt_str
 
-# CallbackData
-cb_lang = CallbackData("lang", "code")
-cb_menu = CallbackData("menu", "action", "val")
-# Обновлено: добавлен параметр date
-cb_sched = CallbackData("sched", "comp", "queue", "date") 
-cb_notify = CallbackData("notify", "key", "val")
+# CallbackData helpers (aiogram 3)
+def cb_lang_new(code: str) -> str:
+    return f"lang:{code}"
+
+def cb_menu_new(action: str, val: str) -> str:
+    return f"menu:{action}:{val}"
+
+def cb_sched_new(comp: str, queue: str, date: str) -> str:
+    return f"sched:{comp}:{queue}:{date}"
+
+def cb_notify_new(key: str, val: int) -> str:
+    return f"notify:{key}:{val}"
+
+def parse_callback_data(data: str, prefix: str, expected: int):
+    if not data or not data.startswith(prefix + ":"):
+        return None
+    parts = data.split(":")
+    if len(parts) < expected + 1:
+        return None
+    return parts[1:expected+1]
 
 # --- Утилиты работы с сохранёнными сравнениями в БД ---
 def ensure_compares_table():
@@ -163,8 +224,8 @@ def intersect_intervals(a, b):
 # --- Клавиатуры ---
 def lang_kb():
     kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton("🇺🇦 Українська", callback_data=cb_lang.new(code="uk"), style="primary"),
-           types.InlineKeyboardButton("🇷🇺 Русский", callback_data=cb_lang.new(code="ru"), style="primary"))
+    kb.add(types.InlineKeyboardButton(text="🇺🇦 Українська", callback_data=cb_lang_new("uk")),
+           types.InlineKeyboardButton(text="🇷🇺 Русский", callback_data=cb_lang_new("ru")))
     return kb
 
 
@@ -183,7 +244,7 @@ def queues_kb_for_compare(company, lang, phase):
     # add in rows of 3
     row = []
     for i, q in enumerate(queues, 1):
-        row.append(types.InlineKeyboardButton(q, callback_data=f"cmp_q{('1' if phase=='c1' else '2')}|{company}|{q}", style="primary"))
+        row.append(types.InlineKeyboardButton(text=q, callback_data=f"cmp_q{('1' if phase=='c1' else '2')}|{company}|{q}"))
         if i % 3 == 0:
             kb.row(*row)
             row = []
@@ -191,7 +252,7 @@ def queues_kb_for_compare(company, lang, phase):
         kb.row(*row)
     # Back button goes to company selection for this phase
     back_cb = "cmp_back_to_c1" if phase == 'c1' else "cmp_back_to_c2"
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=back_cb, style="danger"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data=back_cb))
     return kb
 
 
@@ -201,8 +262,8 @@ async def compare_menu(message: types.Message):
     # Змінюємо ReplyKeyboardMarkup на InlineKeyboardMarkup
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(
-        types.InlineKeyboardButton(get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
-        types.InlineKeyboardButton(get_text(lang, 'btn_compare_my'), callback_data="cmp_start_my")
+        types.InlineKeyboardButton(text=get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
+        types.InlineKeyboardButton(text=get_text(lang, 'btn_compare_my'), callback_data="cmp_start_my")
     )
     await message.answer(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
 
@@ -211,9 +272,9 @@ async def compare_new_start(call: types.CallbackQuery):
     COMPARE_STATE.pop(user_id, None)
     lang = get_user_lang(user_id)
     kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton("ДТЕК", callback_data=f"cmp_c1|ДТЕК", style="primary"),
-           types.InlineKeyboardButton("ЦЕК", callback_data=f"cmp_c1|ЦЕК", style="primary"))
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
+    kb.add(types.InlineKeyboardButton(text="ДТЕК", callback_data=f"cmp_c1|ДТЕК"),
+           types.InlineKeyboardButton(text="ЦЕК", callback_data=f"cmp_c1|ЦЕК"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
     
     # Використовуємо edit_text
     await call.message.edit_text(get_text(lang, 'cmp_choose_first'), reply_markup=kb)
@@ -226,14 +287,14 @@ async def compare_my_list(call: types.CallbackQuery):
     rows = list_user_compares(user_id)
     kb = types.InlineKeyboardMarkup(row_width=1)
     if not rows:
-        kb2 = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
+        kb2 = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
         await call.message.edit_text(get_text(lang, 'cmp_no_saved'), reply_markup=kb2)
         await call.answer()
         return
     for r in rows:
         name = r['name'] or f"{r['comp1']} {r['queue1']} + {r['comp2']} {r['queue2']}"
-        kb.add(types.InlineKeyboardButton(f"{name}", callback_data=f"cmp_run_saved|{r['id']}|today", style="primary"))
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
+        kb.add(types.InlineKeyboardButton(text=f"{name}", callback_data=f"cmp_run_saved|{r['id']}|today"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
     
     # Використовуємо edit_text
     await call.message.edit_text(get_text(lang, 'cmp_list_header'), reply_markup=kb)
@@ -260,8 +321,8 @@ async def compare_callback_router(call: types.CallbackQuery):
         # show compare menu (INLINE keyboard)
         kb = types.InlineKeyboardMarkup(row_width=1)
         kb.add(
-            types.InlineKeyboardButton(get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
-            types.InlineKeyboardButton(get_text(lang, 'btn_compare_my'), callback_data="cmp_start_my")
+            types.InlineKeyboardButton(text=get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
+            types.InlineKeyboardButton(text=get_text(lang, 'btn_compare_my'), callback_data="cmp_start_my")
         )
         try:
             await call.message.edit_text(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
@@ -273,18 +334,18 @@ async def compare_callback_router(call: types.CallbackQuery):
     # Back to company selection for c1/c2
     if data == "cmp_back_to_c1":
         kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("ДТЕК", callback_data=f"cmp_c1|ДТЕК", style="primary"),
-               types.InlineKeyboardButton("ЦЕК", callback_data=f"cmp_c1|ЦЕК", style="primary"))
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
+        kb.add(types.InlineKeyboardButton(text="ДТЕК", callback_data=f"cmp_c1|ДТЕК"),
+               types.InlineKeyboardButton(text="ЦЕК", callback_data=f"cmp_c1|ЦЕК"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
         await call.message.edit_text(get_text(lang, 'cmp_choose_first'), reply_markup=kb)
         await call.answer()
         return
     if data == "cmp_back_to_c2":
         # if first is chosen, we still ask second company
         kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("ДТЕК", callback_data="cmp_c2|ДТЕК", style="primary"),
-               types.InlineKeyboardButton("ЦЕК", callback_data="cmp_c2|ЦЕК", style="primary"))
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
+        kb.add(types.InlineKeyboardButton(text="ДТЕК", callback_data="cmp_c2|ДТЕК"),
+               types.InlineKeyboardButton(text="ЦЕК", callback_data="cmp_c2|ЦЕК"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
         await call.message.edit_text(get_text(lang, 'cmp_choose_second'), reply_markup=kb)
         await call.answer()
         return
@@ -305,9 +366,9 @@ async def compare_callback_router(call: types.CallbackQuery):
             return
         COMPARE_STATE[user_id] = {'first': (comp, q)}
         kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton("ДТЕК", callback_data="cmp_c2|ДТЕК", style="primary"),
-               types.InlineKeyboardButton("ЦЕК", callback_data="cmp_c2|ЦЕК", style="primary"))
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_c1", style="danger"))
+        kb.add(types.InlineKeyboardButton(text="ДТЕК", callback_data="cmp_c2|ДТЕК"),
+               types.InlineKeyboardButton(text="ЦЕК", callback_data="cmp_c2|ЦЕК"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_c1"))
         await call.message.edit_text(get_text(lang, 'cmp_choose_second'), reply_markup=kb)
         await call.answer()
         return
@@ -334,10 +395,10 @@ async def compare_callback_router(call: types.CallbackQuery):
         comp1, q1 = state['first']
         comp2, q2 = state['second']
         kb = types.InlineKeyboardMarkup(row_width=2)
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today", style="primary"),
-               types.InlineKeyboardButton(get_text(lang, 'tomorrow_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|tomorrow", style="primary"))
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_save_button'), callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}", style="success"))
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_c2", style="danger"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today"),
+               types.InlineKeyboardButton(text=get_text(lang, 'tomorrow_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|tomorrow"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'cmp_save_button'), callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_c2"))
         await call.message.edit_text(get_text(lang, 'cmp_ready_preview', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2), reply_markup=kb)
         await call.answer()
         return
@@ -369,7 +430,7 @@ async def compare_callback_router(call: types.CallbackQuery):
             await call.message.edit_text(
                 get_text(lang, 'cmp_saved_msg', name=name),
                 reply_markup=types.InlineKeyboardMarkup().add(
-                    types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger")
+                    types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu")
                 )
             )
         except Exception:
@@ -394,7 +455,7 @@ async def compare_callback_router(call: types.CallbackQuery):
         delete_compare_by_id(int(cid))
         await call.answer(get_text(lang, 'cmp_deleted_ok'), show_alert=True)
         # show updated list
-        await compare_my_list(call.message)
+        await compare_my_list(call)
         return
 
     # cmp_details|comp1|q1|comp2|q2|day
@@ -427,8 +488,8 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     if not rows1 or not rows2:
         kb = types.InlineKeyboardMarkup()
         if day == 'tomorrow':
-            kb.add(types.InlineKeyboardButton(get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today", style="primary"))
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
+            kb.add(types.InlineKeyboardButton(text=get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
         await call.message.edit_text(
             get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
             reply_markup=kb
@@ -459,7 +520,7 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     common = [(s, e) for (s, e) in common if not (s == 1439 and e == 1440) and (e - s) > 0]
 
     if not common:
-        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
+        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
         await call.message.edit_text(
             get_text(lang, 'cmp_no_common', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
             reply_markup=kb
@@ -486,20 +547,19 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     text = f"{header}\n\n" + "\n".join(lines) + f"\n\n{monitor_line}"
 
     kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_details_button'), callback_data=f"cmp_details|{comp1}|{q1}|{comp2}|{q2}|{day}", style="primary"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'cmp_details_button'), callback_data=f"cmp_details|{comp1}|{q1}|{comp2}|{q2}|{day}"))
     other_day = 'tomorrow' if day == 'today' else 'today'
     kb.add(
-        types.InlineKeyboardButton(
-            get_text(lang, 'toggle_day_label', day=(get_text(lang, 'tomorrow_label') if other_day == 'tomorrow' else get_text(lang, 'today_label'))),
+        types.InlineKeyboardButton(text=get_text(lang, 'toggle_day_label', day=(get_text(lang, 'tomorrow_label') if other_day == 'tomorrow' else get_text(lang, 'today_label'))),
             callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{other_day}",
             style="primary"
         )
     )
     if not saved_id:
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_save_button'), callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}", style="success"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'cmp_save_button'), callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}"))
     else:
-        kb.add(types.InlineKeyboardButton(get_text(lang, 'cmp_delete_saved'), callback_data=f"cmp_del|{saved_id}", style="danger"))
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu", style="danger"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'cmp_delete_saved'), callback_data=f"cmp_del|{saved_id}"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
 
     await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
 
@@ -519,8 +579,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
 
     if not rows1 or not rows2:
         kb = types.InlineKeyboardMarkup().add(
-            types.InlineKeyboardButton(
-                get_text(lang, 'back'),
+            types.InlineKeyboardButton(text=get_text(lang, 'back'),
                 callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}",
                 style="danger"
             )
@@ -588,8 +647,7 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     )
 
     kb = types.InlineKeyboardMarkup().add(
-        types.InlineKeyboardButton(
-            get_text(lang, 'back'),
+        types.InlineKeyboardButton(text=get_text(lang, 'back'),
             callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}",
             style="danger"
         )
@@ -610,8 +668,8 @@ def get_user_lang(user_id):
 
 def lang_kb():
     kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton("🇺🇦 Українська", callback_data=cb_lang.new(code="uk"), style="primary"),
-           types.InlineKeyboardButton("🇷🇺 Русский", callback_data=cb_lang.new(code="ru"), style="primary"))
+    kb.add(types.InlineKeyboardButton(text="🇺🇦 Українська", callback_data=cb_lang_new("uk")),
+           types.InlineKeyboardButton(text="🇷🇺 Русский", callback_data=cb_lang_new("ru")))
     return kb
 
 def queues_kb(action_type, company, lang):
@@ -625,12 +683,12 @@ def queues_kb(action_type, company, lang):
     for q in queues:
         if action_type == 'view':
             # Передаем дату в колбэк
-            btns.append(types.InlineKeyboardButton(q, callback_data=cb_sched.new(comp=company, queue=q, date=today_str), style="primary"))
+            btns.append(types.InlineKeyboardButton(text=q, callback_data=cb_sched_new(company, q, today_str)))
         else:
-            btns.append(types.InlineKeyboardButton(q, callback_data=cb_menu.new(action='save', val=f"{company}_{q}"), style="primary"))
+            btns.append(types.InlineKeyboardButton(text=q, callback_data=cb_menu_new('save', f"{company}_{q}")))
     kb.add(*btns)
     back_call = "back_view" if action_type == 'view' else "back_sub"
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data=back_call, style="danger"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data=back_call))
     return kb
 
 # --- Обработчики ---
@@ -641,12 +699,16 @@ async def check_time_cmd(message: types.Message):
 async def start_cmd(message: types.Message):
     await message.answer(get_text('uk', 'select_lang'), reply_markup=lang_kb())
 
-async def set_language(call: types.CallbackQuery, callback_data: dict):
-    lang = callback_data['code']
+async def set_language(call: types.CallbackQuery):
+    parsed = parse_callback_data(call.data or "", "lang", 1)
+    if not parsed:
+        await call.answer()
+        return
+    lang = parsed[0]
     with get_db() as conn:
         conn.execute("INSERT OR REPLACE INTO user_prefs (user_id, language) VALUES (?, ?)", (call.from_user.id, lang))
         conn.commit()
-    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(get_text(lang, 'sub_btn'), url=config.CHANNEL_URL, style="primary")).add(types.InlineKeyboardButton(get_text(lang, 'continue_btn'), callback_data="menu_start", style="success"))
+    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(text=get_text(lang, 'sub_btn'), url=config.CHANNEL_URL)).add(types.InlineKeyboardButton(text=get_text(lang, 'continue_btn'), callback_data="menu_start"))
     try:
         await call.message.edit_text(get_text(lang, 'lang_set'))
     except Exception:
@@ -674,8 +736,8 @@ async def view_schedules_start(call_or_msg):
     kb = types.InlineKeyboardMarkup(row_width=2)
     
     # Основні кнопки компаній
-    btn_dtek = types.InlineKeyboardButton("ДТЕК", callback_data="vcomp_ДТЕК")
-    btn_cek = types.InlineKeyboardButton("ЦЕК", callback_data="vcomp_ЦЕК")
+    btn_dtek = types.InlineKeyboardButton(text="ДТЕК", callback_data="vcomp_ДТЕК")
+    btn_cek = types.InlineKeyboardButton(text="ЦЕК", callback_data="vcomp_ЦЕК")
     kb.row(btn_dtek, btn_cek)
     
     # Отримуємо підписки користувача з БД
@@ -692,9 +754,8 @@ async def view_schedules_start(call_or_msg):
             q = sub['queue']
             # Прибрали глазик
             kb.add(
-                types.InlineKeyboardButton(
-                    f"{comp} {q}", 
-                    callback_data=cb_sched.new(comp=comp, queue=q, date=today_str)
+                types.InlineKeyboardButton(text=f"{comp} {q}", 
+                    callback_data=cb_sched_new(comp, q, today_str)
                 )
             )
 
@@ -710,7 +771,7 @@ async def view_schedules_start(call_or_msg):
 
 async def add_queue_btn(message: types.Message):
     lang = get_user_lang(message.from_user.id)
-    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton("ДТЕК", callback_data="scomp_ДТЕК", style="primary"), types.InlineKeyboardButton("ЦЕК", callback_data="scomp_ЦЕК", style="primary"))
+    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(text="ДТЕК", callback_data="scomp_ДТЕК"), types.InlineKeyboardButton(text="ЦЕК", callback_data="scomp_ЦЕК"))
     await message.answer(get_text(lang, 'choose_comp'), reply_markup=kb)
 
 async def handle_comp_selection(call: types.CallbackQuery):
@@ -731,8 +792,8 @@ async def back_to_comp(call: types.CallbackQuery):
     
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.row(
-        types.InlineKeyboardButton("ДТЕК", callback_data=f"{prefix}ДТЕК"),
-        types.InlineKeyboardButton("ЦЕК", callback_data=f"{prefix}ЦЕК")
+        types.InlineKeyboardButton(text="ДТЕК", callback_data=f"{prefix}ДТЕК"),
+        types.InlineKeyboardButton(text="ЦЕК", callback_data=f"{prefix}ЦЕК")
     )
 
     # Якщо це повернення в меню ПЕРЕГЛЯДУ графіків, додаємо підписки
@@ -748,18 +809,21 @@ async def back_to_comp(call: types.CallbackQuery):
                 comp = sub['company']
                 q = sub['queue']
                 kb.add(
-                    types.InlineKeyboardButton(
-                        f"{comp} {q}", 
-                        callback_data=cb_sched.new(comp=comp, queue=q, date=today_str)
+                    types.InlineKeyboardButton(text=f"{comp} {q}", 
+                        callback_data=cb_sched_new(comp, q, today_str)
                     )
                 )
 
     await call.message.edit_text(get_text(lang, 'choose_comp'), reply_markup=kb, parse_mode="HTML")
     await call.answer()
 
-async def save_sub(call: types.CallbackQuery, callback_data: dict, scheduler):
+async def save_sub(call: types.CallbackQuery, scheduler):
     lang = get_user_lang(call.from_user.id)
-    val = callback_data['val'].split("_")
+    parsed = parse_callback_data(call.data or "", "menu", 2)
+    if not parsed or parsed[0] != "save":
+        await call.answer()
+        return
+    val = parsed[1].split("_")
     comp, q = val[0], val[1]
     
     with get_db() as conn:
@@ -846,9 +910,12 @@ def get_status_line(outages, now_time, lang):
     return get_text(lang, 'status_light_now')
 
 # Обновленная функция просмотра графиков с кнопками Сегодня/Завтра
-async def show_sched(call: types.CallbackQuery, callback_data: dict):
-    comp, q = callback_data['comp'], callback_data['queue']
-    target_date_str = callback_data.get('date')
+async def show_sched(call: types.CallbackQuery):
+    parsed = parse_callback_data(call.data or "", "sched", 3)
+    if not parsed:
+        await call.answer()
+        return
+    comp, q, target_date_str = parsed
     lang = get_user_lang(call.from_user.id)
 
     now_ua = datetime.now(UA_TZ)
@@ -965,24 +1032,21 @@ async def show_sched(call: types.CallbackQuery, callback_data: dict):
     # --- КНОПКИ ---
     if db_date_str == today_str:
         kb.add(
-            types.InlineKeyboardButton(
-                get_text(lang,'tomorrow_label'),
-                callback_data=cb_sched.new(comp=comp,queue=q,date=tomorrow_str),
+            types.InlineKeyboardButton(text=get_text(lang,'tomorrow_label'),
+                callback_data=cb_sched_new(comp, q, tomorrow_str),
                 style="primary"
             )
         )
     else:
         kb.add(
-            types.InlineKeyboardButton(
-                get_text(lang,'today_label'),
-                callback_data=cb_sched.new(comp=comp,queue=q,date=today_str),
+            types.InlineKeyboardButton(text=get_text(lang,'today_label'),
+                callback_data=cb_sched_new(comp, q, today_str),
                 style="primary"
             )
         )
 
     kb.add(
-        types.InlineKeyboardButton(
-            get_text(lang,'back'),
+        types.InlineKeyboardButton(text=get_text(lang,'back'),
             callback_data=f"vcomp_{comp}",
             style="danger"
         )
@@ -1008,7 +1072,7 @@ async def my_queues(message: types.Message):
         return await message.answer(get_text(lang, 'empty_list'))
     kb = types.InlineKeyboardMarkup()
     for r in rows:
-        kb.add(types.InlineKeyboardButton(f"🗑 {r['company']} {r['queue']}", callback_data=f"del_{r['id']}", style="danger"))
+        kb.add(types.InlineKeyboardButton(text=f"🗑 {r['company']} {r['queue']}", callback_data=f"del_{r['id']}"))
     await message.answer(get_text(lang, 'my_que'), reply_markup=kb)
 
 async def delete_sub(call: types.CallbackQuery, scheduler):
@@ -1056,8 +1120,7 @@ async def delete_sub(call: types.CallbackQuery, scheduler):
         new_kb = types.InlineKeyboardMarkup()
         for r in rows:
             # Создаем кнопки заново с актуальными ID
-            new_kb.add(types.InlineKeyboardButton(
-                f"🗑 {r['company']} {r['queue']}", 
+            new_kb.add(types.InlineKeyboardButton(text=f"🗑 {r['company']} {r['queue']}", 
                 callback_data=f"del_{r['id']}"
             ))
 
@@ -1074,14 +1137,14 @@ async def delete_sub(call: types.CallbackQuery, scheduler):
 
 async def support_cmd(message: types.Message):
     lang = get_user_lang(message.from_user.id)
-    await message.answer(get_text(lang, 'support_text', user=config.SUPPORT_USER, url=config.DONATE_URL), disable_web_page_preview=True, parse_mode=types.ParseMode.HTML)
+    await message.answer(get_text(lang, 'support_text', user=config.SUPPORT_USER, url=config.DONATE_URL), disable_web_page_preview=True)
 
 async def settings_cmd(message: types.Message):
     lang = get_user_lang(message.from_user.id)
     kb = types.InlineKeyboardMarkup(row_width=1)
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'btn_lang_switch'), callback_data="open_lang", style="primary"))
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'btn_notifications'), callback_data="open_notifications", style="primary"))
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'btn_toggle_all'), callback_data="toggle_all", style="danger"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'btn_lang_switch'), callback_data="open_lang"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'btn_notifications'), callback_data="open_notifications"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'btn_toggle_all'), callback_data="toggle_all"))
     await message.answer(get_text(lang, 'settings_text'), reply_markup=kb)
 
 async def open_language_menu(call: types.CallbackQuery):
@@ -1103,22 +1166,26 @@ async def open_notifications(call: types.CallbackQuery):
     def state_emoji(v): return "✅" if int(v) == 1 else "❌"
 
     kb = types.InlineKeyboardMarkup(row_width=1)
-    kb.add(types.InlineKeyboardButton(f"{get_text(lang, 'notif_label_off')}: {state_emoji(settings['notify_off'])}", callback_data=cb_notify.new(key='notify_off', val=settings['notify_off']), style="danger"))
-    kb.add(types.InlineKeyboardButton(f"{get_text(lang, 'notif_label_on')}: {state_emoji(settings['notify_on'])}", callback_data=cb_notify.new(key='notify_on', val=settings['notify_on']), style="danger"))
-    kb.add(types.InlineKeyboardButton(f"{get_text(lang, 'notif_label_off_10')}: {state_emoji(settings['notify_off_10'])}", callback_data=cb_notify.new(key='notify_off_10', val=settings['notify_off_10']), style="danger"))
-    kb.add(types.InlineKeyboardButton(f"{get_text(lang, 'notif_label_on_10')}: {state_emoji(settings['notify_on_10'])}", callback_data=cb_notify.new(key='notify_on_10', val=settings['notify_on_10']), style="danger"))
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'back'), callback_data="open_settings_back"))
+    kb.add(types.InlineKeyboardButton(text=f"{get_text(lang, 'notif_label_off')}: {state_emoji(settings['notify_off'])}", callback_data=cb_notify_new('notify_off', settings['notify_off'])))
+    kb.add(types.InlineKeyboardButton(text=f"{get_text(lang, 'notif_label_on')}: {state_emoji(settings['notify_on'])}", callback_data=cb_notify_new('notify_on', settings['notify_on'])))
+    kb.add(types.InlineKeyboardButton(text=f"{get_text(lang, 'notif_label_off_10')}: {state_emoji(settings['notify_off_10'])}", callback_data=cb_notify_new('notify_off_10', settings['notify_off_10'])))
+    kb.add(types.InlineKeyboardButton(text=f"{get_text(lang, 'notif_label_on_10')}: {state_emoji(settings['notify_on_10'])}", callback_data=cb_notify_new('notify_on_10', settings['notify_on_10'])))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="open_settings_back"))
     try:
         await call.message.edit_text(get_text(lang, 'notifications_text'), reply_markup=kb)
     except Exception:
         await call.message.answer(get_text(lang, 'notifications_text'), reply_markup=kb)
     await call.answer()
 
-async def toggle_notify(call: types.CallbackQuery, callback_data: dict):
+async def toggle_notify(call: types.CallbackQuery):
     user_id = call.from_user.id
-    key = callback_data['key']
+    parsed = parse_callback_data(call.data or "", "notify", 2)
+    if not parsed:
+        await call.answer()
+        return
+    key = parsed[0]
     try:
-        current = int(callback_data['val'])
+        current = int(parsed[1])
     except Exception:
         current = get_user_settings(user_id).get(key, 1)
     new = 0 if current == 1 else 1
@@ -1143,9 +1210,9 @@ async def toggle_all_notify(call: types.CallbackQuery):
 async def back_to_settings_from_notifications(call: types.CallbackQuery):
     lang = get_user_lang(call.from_user.id)
     kb = types.InlineKeyboardMarkup(row_width=1)
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'btn_lang_switch'), callback_data="open_lang", style="primary"))
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'btn_notifications'), callback_data="open_notifications", style="primary"))
-    kb.add(types.InlineKeyboardButton(get_text(lang, 'btn_toggle_all'), callback_data="toggle_all", style="danger"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'btn_lang_switch'), callback_data="open_lang"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'btn_notifications'), callback_data="open_notifications"))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'btn_toggle_all'), callback_data="toggle_all"))
     try:
         await call.message.edit_text(get_text(lang, 'settings_text'), reply_markup=kb)
     except Exception:
@@ -1274,67 +1341,62 @@ async def inline_echo(inline_query: types.InlineQuery):
     await inline_query.answer(results=[item], cache_time=60)
 
 # --- Реєстрація ---
-def register_handlers(dp: Dispatcher, scheduler): # <-- Добавили scheduler
-    dp.register_message_handler(compare_menu, lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare'))
-    dp.register_message_handler(compare_new_start, lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare_new'))
-    dp.register_message_handler(compare_my_list, lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare_my'))
+def register_handlers(dp, scheduler):
+    router = Router(name="client")
 
-    dp.register_callback_query_handler(
+    router.message.register(compare_menu, lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare'))
+
+    router.callback_query.register(
         compare_callback_router,
-        lambda c: c.data and any(c.data.startswith(p) for p in (
-            'cmp_back','cmp_c1|','cmp_q1|','cmp_c2|','cmp_q2|','cmp_run|','cmp_save|','cmp_run_saved|','cmp_del|','cmp_details|'
-        ))
+        lambda c: c.data and c.data.startswith('cmp_')
     )
 
     back_labels = (get_text('uk', 'back'), get_text('ru', 'back'))
-    dp.register_message_handler(
+    router.message.register(
         show_main_menu_msg,
         lambda m: (m.reply_to_message is None) and bool(m.text) and (m.text in back_labels)
     )
-    
-    dp.register_message_handler(check_time_cmd, commands=['check'])
-    dp.register_message_handler(start_cmd, commands=['start'])
-    dp.register_callback_query_handler(set_language, cb_lang.filter())
-    dp.register_callback_query_handler(show_main_menu, text="menu_start")
 
-    dp.register_message_handler(view_schedules_start, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["графік", "график"]))
-    dp.register_message_handler(add_queue_btn, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["додати", "добавить"]))
-    dp.register_message_handler(my_queues, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["мої чер", "мои оче"]))
+    router.message.register(check_time_cmd, Command('check'))
+    router.message.register(start_cmd, Command('start'))
+    router.callback_query.register(set_language, lambda c: c.data and c.data.startswith('lang:'))
+    router.callback_query.register(show_main_menu, lambda c: c.data == 'menu_start')
+
+    router.message.register(view_schedules_start, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["графік", "график"]))
+    router.message.register(add_queue_btn, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["додати", "добавить"]))
+    router.message.register(my_queues, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["мої чер", "мои оче"]))
 
     support_labels = (get_text('uk', 'btn_support'), get_text('ru', 'btn_support'))
     settings_labels = (get_text('uk', 'btn_settings'), get_text('ru', 'btn_settings'))
-    dp.register_message_handler(support_cmd, lambda m: bool(m.text) and m.text in support_labels)
-    dp.register_message_handler(settings_cmd, lambda m: bool(m.text) and m.text in settings_labels)
+    router.message.register(support_cmd, lambda m: bool(m.text) and m.text in support_labels)
+    router.message.register(settings_cmd, lambda m: bool(m.text) and m.text in settings_labels)
 
-    dp.register_callback_query_handler(handle_comp_selection, lambda c: c.data and c.data.startswith(('vcomp_', 'scomp_')))
-    dp.register_callback_query_handler(show_sched, cb_sched.filter())
-    
-    async def _save_sub_wrapper(call: types.CallbackQuery, callback_data: dict):
-        await save_sub(call, callback_data, scheduler)
-    dp.register_callback_query_handler(_save_sub_wrapper, cb_menu.filter(action="save"))
-    
-    dp.register_callback_query_handler(open_language_menu, text="open_lang")
+    router.callback_query.register(handle_comp_selection, lambda c: c.data and c.data.startswith(('vcomp_', 'scomp_')))
+    router.callback_query.register(show_sched, lambda c: c.data and c.data.startswith('sched:'))
 
-    dp.register_callback_query_handler(open_notifications, text="open_notifications")
-    dp.register_callback_query_handler(toggle_notify, cb_notify.filter())
-    dp.register_callback_query_handler(toggle_all_notify, text="toggle_all")
-    dp.register_callback_query_handler(back_to_settings_from_notifications, text="open_settings_back")
+    async def _save_sub_wrapper(call: types.CallbackQuery):
+        await save_sub(call, scheduler)
+    router.callback_query.register(_save_sub_wrapper, lambda c: c.data and c.data.startswith('menu:save:'))
 
-    dp.register_callback_query_handler(back_to_comp, text=["back_view", "back_sub"])
-    
+    router.callback_query.register(open_language_menu, lambda c: c.data == 'open_lang')
+    router.callback_query.register(open_notifications, lambda c: c.data == 'open_notifications')
+    router.callback_query.register(toggle_notify, lambda c: c.data and c.data.startswith('notify:'))
+    router.callback_query.register(toggle_all_notify, lambda c: c.data == 'toggle_all')
+    router.callback_query.register(back_to_settings_from_notifications, lambda c: c.data == 'open_settings_back')
+    router.callback_query.register(back_to_comp, lambda c: c.data in ['back_view', 'back_sub'])
+
     async def _delete_sub_wrapper(call: types.CallbackQuery):
         await delete_sub(call, scheduler)
-    dp.register_callback_query_handler(_delete_sub_wrapper, lambda c: c.data and c.data.startswith('del_'))
+    router.callback_query.register(_delete_sub_wrapper, lambda c: c.data and c.data.startswith('del_'))
 
-    dp.register_message_handler(view_schedules_start, commands=['sched'])
-    dp.register_message_handler(add_queue_btn, commands=['add'])
-    dp.register_message_handler(my_queues, commands=['subs'])
-    dp.register_message_handler(show_main_menu_msg, commands=['menu'])
-    dp.register_message_handler(support_cmd, commands=['support'])
-    dp.register_message_handler(settings_cmd, commands=['settings'])
-    dp.register_message_handler(compare_menu, commands=['compare'])
-  
-    dp.register_inline_handler(inline_echo)
+    router.message.register(view_schedules_start, Command('sched'))
+    router.message.register(add_queue_btn, Command('add'))
+    router.message.register(my_queues, Command('subs'))
+    router.message.register(show_main_menu_msg, Command('menu'))
+    router.message.register(support_cmd, Command('support'))
+    router.message.register(settings_cmd, Command('settings'))
+    router.message.register(compare_menu, Command('compare'))
+    router.inline_query.register(inline_echo)
+    router.callback_query.register(compare_menu, lambda c: c.data == 'compare')
 
-    dp.register_callback_query_handler(compare_menu, text="compare")
-    dp.register_callback_query_handler(compare_callback_router, lambda c: c.data and c.data.startswith('cmp_'))
+    dp.include_router(router)
