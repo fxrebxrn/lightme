@@ -588,3 +588,4 @@ def register_handlers(dp, scheduler):
     router.message.register(cmd_avaron, Command('avaron'))
     router.message.register(cmd_avaroff, Command('avaroff'))
     dp.include_router(router)
+    
