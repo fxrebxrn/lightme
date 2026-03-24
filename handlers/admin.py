@@ -13,7 +13,7 @@ import os
 import tempfile
 import sqlite3
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 
 UA_TZ = pytz.timezone('Europe/Kyiv')
@@ -26,6 +26,7 @@ def format_display_date(date_str: str):
     
 now = datetime.now(UA_TZ)
 today_str = now.strftime('%d.%m.%Y')
+tomorrow_str = (now + timedelta(days=1)).strftime('%d.%m.%Y')
 
 async def cmd_avaron(message: types.Message):
     if message.from_user.id != config.ADMIN_ID: 
@@ -39,6 +40,31 @@ async def cmd_avaron(message: types.Message):
             conn.execute("INSERT INTO bot_settings (key, value) VALUES ('avaron', '1')")
         conn.commit()
     await message.answer("❗️ Режим Аварійних відключень: УВІМКНЕНО")
+
+def kb_admin_cmds():
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.row(
+        types.KeyboardButton(text=f"/upload ДТЕК {today_str}\n-"), 
+        types.KeyboardButton(text=f"/upload ЦЕК {today_str}\n-")
+    )
+    kb.row(
+        types.KeyboardButton(text=f"/upload ДТЕК {tomorrow_str}\n-"), 
+        types.KeyboardButton(text=f"/upload ЦЕК {tomorrow_str}\n-")
+    )
+    kb.row(
+        types.KeyboardButton(text="/avaron"), 
+        types.KeyboardButton(text="/avarooff")
+    )
+    kb.row(
+        types.KeyboardButton(text="/getdb"), 
+        types.KeyboardButton(text="/stats")
+    )
+    return kb
+
+async def admin_menu(message: types.Message):
+    if message.from_user.id != config.ADMIN_ID: 
+        return
+    await message.answer("Админ меню:", reply_markup=kb_admin_cmds())
 
 async def cmd_avaroff(message: types.Message):
     if message.from_user.id != config.ADMIN_ID: 
@@ -587,4 +613,5 @@ def register_handlers(dp, scheduler):
     router.message.register(admin_help, Command('ahelp'))
     router.message.register(cmd_avaron, Command('avaron'))
     router.message.register(cmd_avaroff, Command('avaroff'))
+    router.message.register(admin_menu, Command('amenu'))
     dp.include_router(router)
