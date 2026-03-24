@@ -51,6 +51,7 @@ class CompatReplyKeyboardMarkup(types.ReplyKeyboardMarkup):
             self.keyboard.append(list(buttons))
         return self
 
+router = Router(name="client")
 
 # Backward-compatible aliases used by the rest of this file
 types.InlineKeyboardMarkup = CompatInlineKeyboardMarkup
@@ -231,7 +232,10 @@ def lang_kb():
 
 def main_menu_kb(lang):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(get_text(lang, 'btn_add_queue'), get_text(lang, 'btn_my_queues'))
+    kb.row(
+        types.KeyboardButton(text=get_text(lang, 'btn_add_queue', icon_custom_emoji_id="5258108352008823107")), 
+        types.KeyboardButton(text=get_text(lang, 'btn_my_queues', icon_custom_emoji_id="5452165780579843515"))
+        )
     kb.row(get_text(lang, 'btn_schedules'), get_text(lang, 'btn_compare'))
     kb.row(get_text(lang, 'btn_settings'), get_text(lang, 'btn_support'))
     return kb
@@ -1072,7 +1076,12 @@ async def my_queues(message: types.Message):
         return await message.answer(get_text(lang, 'empty_list'))
     kb = types.InlineKeyboardMarkup()
     for r in rows:
-        kb.add(types.InlineKeyboardButton(text=f"🗑 {r['company']} {r['queue']}", callback_data=f"del_{r['id']}"))
+        kb.add(types.InlineKeyboardButton(
+            text=f"{r['company']} {r['queue']}",
+            callback_data=f"del_{r['id']}",
+            custom_emoji_id="5258130763148172425",
+            style="danger"
+        ))
     await message.answer(get_text(lang, 'my_que'), reply_markup=kb)
 
 async def delete_sub(call: types.CallbackQuery, scheduler):
@@ -1342,7 +1351,6 @@ async def inline_echo(inline_query: types.InlineQuery):
 
 # --- Реєстрація ---
 def register_handlers(dp, scheduler):
-    router = Router(name="client")
 
     router.message.register(compare_menu, lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare'))
 

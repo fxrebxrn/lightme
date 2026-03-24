@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 import pytz
 
 UA_TZ = pytz.timezone('Europe/Kyiv')
+router = Router(name="admin")
 
 def format_display_date(date_str: str):
     try:
@@ -598,7 +599,6 @@ async def upload_schedule(message: types.Message, scheduler):
     await message.answer(f"✅ {company} ({format_display_date(date_str)}) завантажено!\nРозіслано сповіщень для {len(changed_queues)} черг.\n\n{full_schedules_text}")
 
 def register_handlers(dp, scheduler):
-    router = Router(name="admin")
 
     async def _upload_schedule_wrapper(message: types.Message):
         await upload_schedule(message, scheduler)
