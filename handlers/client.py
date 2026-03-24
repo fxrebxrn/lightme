@@ -232,10 +232,7 @@ def lang_kb():
 
 def main_menu_kb(lang):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row(
-        types.KeyboardButton(text=get_text(lang, 'btn_add_queue', icon_custom_emoji_id="5258108352008823107")), 
-        types.KeyboardButton(text=get_text(lang, 'btn_my_queues', icon_custom_emoji_id="5452165780579843515"))
-        )
+    kb.row(get_text(lang, 'btn_add_queue'), get_text(lang, 'btn_my_queues'))
     kb.row(get_text(lang, 'btn_schedules'), get_text(lang, 'btn_compare'))
     kb.row(get_text(lang, 'btn_settings'), get_text(lang, 'btn_support'))
     return kb
@@ -1077,9 +1074,8 @@ async def my_queues(message: types.Message):
     kb = types.InlineKeyboardMarkup()
     for r in rows:
         kb.add(types.InlineKeyboardButton(
-            text=f"{r['company']} {r['queue']}",
+            text=f"🗑 {r['company']} {r['queue']}",
             callback_data=f"del_{r['id']}",
-            custom_emoji_id="5258130763148172425",
             style="danger"
         ))
     await message.answer(get_text(lang, 'my_que'), reply_markup=kb)
