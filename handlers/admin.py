@@ -26,8 +26,6 @@ def format_display_date(date_str: str):
         return date_str
     
 now = datetime.now(UA_TZ)
-today_str = now.strftime('%d.%m.%Y')
-tomorrow_str = (now + timedelta(days=1)).strftime('%d.%m.%Y')
 
 async def cmd_avaron(message: types.Message):
     if message.from_user.id != config.ADMIN_ID: 
@@ -43,6 +41,10 @@ async def cmd_avaron(message: types.Message):
     await message.answer("❗️ Режим Аварійних відключень: УВІМКНЕНО")
 
 def kb_admin_cmds():
+    now = datetime.now(UA_TZ)
+    today_str = now.strftime('%d.%m.%Y')
+    tomorrow_str = (now + timedelta(days=1)).strftime('%d.%m.%Y')
+
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
     kb.row(
         types.KeyboardButton(text=f"/upload ДТЕК {today_str}\n-"), 
