@@ -136,17 +136,29 @@ def list_user_compares(user_id):
     return rows
 
 
-def get_compare_by_id(cid):
+def get_compare_by_id(cid, user_id=None):
     ensure_compares_table()
     with get_db() as conn:
-        row = conn.execute("SELECT id, user_id, name, comp1, queue1, comp2, queue2, created_at FROM compares WHERE id=?", (cid,)).fetchone()
+        if user_id is None:
+            row = conn.execute(
+                "SELECT id, user_id, name, comp1, queue1, comp2, queue2, created_at FROM compares WHERE id=?",
+                (cid,)
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id, user_id, name, comp1, queue1, comp2, queue2, created_at FROM compares WHERE id=? AND user_id=?",
+                (cid, user_id)
+            ).fetchone()
     return row
 
 
-def delete_compare_by_id(cid):
+def delete_compare_by_id(cid, user_id=None):
     ensure_compares_table()
     with get_db() as conn:
-        conn.execute("DELETE FROM compares WHERE id=?", (cid,))
+        if user_id is None:
+            conn.execute("DELETE FROM compares WHERE id=?", (cid,))
+        else:
+            conn.execute("DELETE FROM compares WHERE id=? AND user_id=?", (cid, user_id))
         conn.commit()
 
 

@@ -175,7 +175,7 @@ async def upload_db_via_bot(message: types.Message):
         shutil.move(temp_path, dst)
         
         # Даем права на файл (на всякий случай для Docker)
-        os.chmod(dst, 0o666)
+        os.chmod(dst, 0o600)
         
     except Exception as e:
         # попытка отката из backup
