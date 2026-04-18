@@ -1,9 +1,9 @@
 from aiogram import Router, types
 from aiogram.filters import Command
 from database.db import get_db, get_user_settings, set_user_setting
-import config
+from config import settings
 from locales.strings import get_text
-from services.scheduler import parse_localized_datetime
+from services.scheduler import rebuild_jobs
 from datetime import datetime, timedelta
 import pytz
 import sqlite3
@@ -11,8 +11,6 @@ import uuid
 
 
 class CompatInlineKeyboardMarkup(types.InlineKeyboardMarkup):
-    """aiogram2-style helper for aiogram3."""
-
     def __init__(self, row_width: int = 3, inline_keyboard=None, **kwargs):
         super().__init__(inline_keyboard=inline_keyboard or [], **kwargs)
         self.row_width = row_width
@@ -32,8 +30,6 @@ class CompatInlineKeyboardMarkup(types.InlineKeyboardMarkup):
 
 
 class CompatReplyKeyboardMarkup(types.ReplyKeyboardMarkup):
-    """aiogram2-style helper for aiogram3."""
-
     def __init__(self, resize_keyboard: bool = True, row_width: int = 3, keyboard=None, **kwargs):
         super().__init__(keyboard=keyboard or [], resize_keyboard=resize_keyboard, **kwargs)
         self.row_width = row_width
@@ -51,42 +47,47 @@ class CompatReplyKeyboardMarkup(types.ReplyKeyboardMarkup):
             self.keyboard.append(list(buttons))
         return self
 
-router = Router(name="client")
 
-# Backward-compatible aliases used by the rest of this file
+router = Router(name="client")
 types.InlineKeyboardMarkup = CompatInlineKeyboardMarkup
 types.ReplyKeyboardMarkup = CompatReplyKeyboardMarkup
 
 COMPARE_STATE = {}
-# Часовой пояс Киева
 UA_TZ = pytz.timezone('Europe/Kyiv')
 
+QUEUE_NAMES = ["1.1", "1.2", "2.1", "2.2", "3.1", "3.2",
+               "4.1", "4.2", "5.1", "5.2", "6.1", "6.2"]
+
+
 def format_display_date(date_str: str):
-    """Перетворює дату з YYYY-MM-DD у DD.MM.YYYY для показу користувачу."""
     try:
         return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
     except Exception:
         return date_str
 
+
 def format_display_datetime(dt_str: str):
-    """Перетворює datetime з YYYY-MM-DD HH:MM:SS у DD.MM.YYYY HH:MM:SS."""
     try:
         return datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S').strftime('%d.%m.%Y %H:%M:%S')
     except Exception:
         return dt_str
 
-# CallbackData helpers (aiogram 3)
+
 def cb_lang_new(code: str) -> str:
     return f"lang:{code}"
+
 
 def cb_menu_new(action: str, val: str) -> str:
     return f"menu:{action}:{val}"
 
+
 def cb_sched_new(comp: str, queue: str, date: str) -> str:
     return f"sched:{comp}:{queue}:{date}"
 
+
 def cb_notify_new(key: str, val: int) -> str:
     return f"notify:{key}:{val}"
+
 
 def parse_callback_data(data: str, prefix: str, expected: int):
     if not data or not data.startswith(prefix + ":"):
@@ -94,9 +95,9 @@ def parse_callback_data(data: str, prefix: str, expected: int):
     parts = data.split(":")
     if len(parts) < expected + 1:
         return None
-    return parts[1:expected+1]
+    return parts[1:expected + 1]
 
-# --- Утилиты работы с сохранёнными сравнениями в БД ---
+
 def ensure_compares_table():
     with get_db() as conn:
         conn.execute("""
@@ -113,6 +114,7 @@ def ensure_compares_table():
         """)
         conn.commit()
 
+
 def save_compare_to_db(user_id, name, comp1, q1, comp2, q2):
     ensure_compares_table()
     with get_db() as conn:
@@ -122,17 +124,22 @@ def save_compare_to_db(user_id, name, comp1, q1, comp2, q2):
         )
         conn.commit()
         return cur.lastrowid
-        
+
+
 def count_user_compares(user_id):
     ensure_compares_table()
     with get_db() as conn:
         row = conn.execute("SELECT COUNT(*) as c FROM compares WHERE user_id=?", (user_id,)).fetchone()
     return row['c'] if row else 0
 
+
 def list_user_compares(user_id):
     ensure_compares_table()
     with get_db() as conn:
-        rows = conn.execute("SELECT id, name, comp1, queue1, comp2, queue2, created_at FROM compares WHERE user_id=? ORDER BY created_at DESC", (user_id,)).fetchall()
+        rows = conn.execute(
+            "SELECT id, name, comp1, queue1, comp2, queue2, created_at FROM compares WHERE user_id=? ORDER BY created_at DESC",
+            (user_id,)
+        ).fetchall()
     return rows
 
 
@@ -162,7 +169,6 @@ def delete_compare_by_id(cid, user_id=None):
         conn.commit()
 
 
-# --- Утилиты времени / интервалы ---
 def normalize_time_and_offset(time_str: str):
     t = time_str.strip()
     if t == '24:00':
@@ -185,11 +191,13 @@ def format_minutes(m):
     mm = m % 60
     return f"{hh:02d}:{mm:02d}"
 
+
 def _format_hours_decimal(minutes: int):
     hours = minutes / 60
     if hours.is_integer():
         return str(int(hours))
     return f"{hours:.1f}".rstrip('0').rstrip('.')
+
 
 def merge_intervals(intervals):
     if not intervals:
@@ -234,11 +242,53 @@ def intersect_intervals(a, b):
     return res
 
 
-# --- Клавиатуры ---
+def get_user_lang(user_id):
+    with get_db() as conn:
+        res = conn.execute("SELECT language FROM user_prefs WHERE user_id = ?", (user_id,)).fetchone()
+        return res['language'] if res else 'uk'
+
+
+def format_remaining_time(minutes, lang):
+    hours = minutes // 60
+    mins = minutes % 60
+    parts = []
+    if hours > 0:
+        if lang == "ru":
+            parts.append(f"{hours} ч.")
+        else:
+            parts.append(f"{hours} год.")
+    if mins > 0:
+        if lang == "ru":
+            parts.append(f"{mins} мин.")
+        else:
+            parts.append(f"{mins} хв.")
+    return " ".join(parts)
+
+
+def get_status_line(outages, now_time, lang):
+    now_minutes = minutes_from_str(now_time)
+    for off, on in outages:
+        off_m = minutes_from_str(off)
+        on_m = minutes_from_str(on)
+        if off_m <= now_minutes < on_m:
+            remain = on_m - now_minutes
+            remain_text = format_remaining_time(remain, lang)
+            return get_text(lang, 'status_no_light_until', time=on, remain=remain_text)
+    for off, on in outages:
+        off_m = minutes_from_str(off)
+        if now_minutes < off_m:
+            remain = off_m - now_minutes
+            remain_text = format_remaining_time(remain, lang)
+            return get_text(lang, 'status_light_until', time=off, remain=remain_text)
+    return get_text(lang, 'status_light_now')
+
+
 def lang_kb():
     kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton(text="🇺🇦 Українська", callback_data=cb_lang_new("uk")),
-           types.InlineKeyboardButton(text="🇷🇺 Русский", callback_data=cb_lang_new("ru")))
+    kb.add(
+        types.InlineKeyboardButton(text="🇺🇦 Українська", callback_data=cb_lang_new("uk")),
+        types.InlineKeyboardButton(text="🇷🇺 Русский", callback_data=cb_lang_new("ru"))
+    )
     return kb
 
 
@@ -250,29 +300,349 @@ def main_menu_kb(lang):
     return kb
 
 
+def queues_kb(action_type, company, lang):
+    kb = types.InlineKeyboardMarkup(row_width=3)
+    btns = []
+    today_str = datetime.now(UA_TZ).strftime('%Y-%m-%d')
+    for q in QUEUE_NAMES:
+        if action_type == 'view':
+            btns.append(types.InlineKeyboardButton(text=q, callback_data=cb_sched_new(company, q, today_str)))
+        else:
+            btns.append(types.InlineKeyboardButton(text=q, callback_data=cb_menu_new('save', f"{company}_{q}")))
+    kb.add(*btns)
+    back_call = "back_view" if action_type == 'view' else "back_sub"
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data=back_call))
+    return kb
+
+
 def queues_kb_for_compare(company, lang, phase):
-    # phase: 'c1' or 'c2' to decide back-button behavior
-    queues = ["1.1", "1.2", "2.1", "2.2", "3.1", "3.2", "4.1", "4.2", "5.1", "5.2", "6.1", "6.2"]
     kb = types.InlineKeyboardMarkup()
-    # add in rows of 3
     row = []
-    for i, q in enumerate(queues, 1):
-        row.append(types.InlineKeyboardButton(text=q, callback_data=f"cmp_q{('1' if phase=='c1' else '2')}|{company}|{q}"))
+    for i, q in enumerate(QUEUE_NAMES, 1):
+        row.append(types.InlineKeyboardButton(
+            text=q,
+            callback_data=f"cmp_q{('1' if phase == 'c1' else '2')}|{company}|{q}"
+        ))
         if i % 3 == 0:
             kb.row(*row)
             row = []
     if row:
         kb.row(*row)
-    # Back button goes to company selection for this phase
     back_cb = "cmp_back_to_c1" if phase == 'c1' else "cmp_back_to_c2"
     kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data=back_cb))
     return kb
 
 
-# --- Обработчики сравнения ---
+async def start_cmd(message: types.Message):
+    await message.answer(get_text('uk', 'select_lang'), reply_markup=lang_kb())
+
+
+async def check_time_cmd(message: types.Message):
+    now = datetime.now(UA_TZ).strftime('%d.%m.%Y %H:%M:%S')
+    await message.answer(f"Server time (Europe/Kyiv): {now}")
+
+
+async def set_language(call: types.CallbackQuery):
+    parsed = parse_callback_data(call.data or "", "lang", 1)
+    if not parsed:
+        await call.answer()
+        return
+    lang = parsed[0]
+    with get_db() as conn:
+        conn.execute("INSERT OR REPLACE INTO user_prefs (user_id, language) VALUES (?, ?)", (call.from_user.id, lang))
+        conn.commit()
+    kb = types.InlineKeyboardMarkup()
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'sub_btn'), url=settings.CHANNEL_URL))
+    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'continue_btn'), callback_data="menu_start"))
+    try:
+        await call.message.edit_text(get_text(lang, 'lang_set'))
+    except Exception:
+        await call.message.answer(get_text(lang, 'lang_set'))
+    await call.message.answer(get_text(lang, 'sub_recommend'), reply_markup=kb, disable_web_page_preview=True)
+    await call.answer()
+
+
+async def show_main_menu(call: types.CallbackQuery):
+    lang = get_user_lang(call.from_user.id)
+    await call.message.answer(get_text(lang, 'menu_main'), reply_markup=main_menu_kb(lang))
+    await call.answer()
+
+
+async def show_main_menu_msg(message: types.Message):
+    lang = get_user_lang(message.from_user.id)
+    try:
+        await message.answer(get_text(lang, 'menu_main'), reply_markup=main_menu_kb(lang))
+    except Exception:
+        await message.answer(get_text(lang, 'menu_main'))
+
+
+async def view_schedules_start(call_or_msg):
+    if isinstance(call_or_msg, types.CallbackQuery):
+        user_id = call_or_msg.from_user.id
+        message = call_or_msg.message
+    else:
+        user_id = call_or_msg.from_user.id
+        message = call_or_msg
+    lang = get_user_lang(user_id)
+    kb = types.InlineKeyboardMarkup(row_width=2)
+    kb.row(
+        types.InlineKeyboardButton(text="ДТЕК", callback_data="vcomp_ДТЕК"),
+        types.InlineKeyboardButton(text="ЦЕК", callback_data="vcomp_ЦЕК")
+    )
+    with get_db() as conn:
+        subs = conn.execute("SELECT company, queue FROM users WHERE user_id=?", (user_id,)).fetchall()
+    if subs:
+        now_ua = datetime.now(UA_TZ)
+        today_str = now_ua.strftime('%Y-%m-%d')
+        for sub in subs:
+            comp = sub['company']
+            q = sub['queue']
+            kb.add(types.InlineKeyboardButton(text=f"{comp} {q}", callback_data=cb_sched_new(comp, q, today_str)))
+    text = get_text(lang, 'choose_comp')
+    if isinstance(call_or_msg, types.CallbackQuery):
+        await message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+        await call_or_msg.answer()
+    else:
+        await message.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+async def add_queue_btn(message: types.Message):
+    lang = get_user_lang(message.from_user.id)
+    kb = types.InlineKeyboardMarkup()
+    kb.add(
+        types.InlineKeyboardButton(text="ДТЕК", callback_data="scomp_ДТЕК"),
+        types.InlineKeyboardButton(text="ЦЕК", callback_data="scomp_ЦЕК")
+    )
+    await message.answer(get_text(lang, 'choose_comp'), reply_markup=kb)
+
+
+async def handle_comp_selection(call: types.CallbackQuery):
+    lang = get_user_lang(call.from_user.id)
+    try:
+        action, comp = call.data.split("_", 1)
+    except Exception:
+        await call.answer("Невірні дані", show_alert=True)
+        return
+    mode = 'view' if action == 'vcomp' else 'save'
+    await call.message.edit_text(
+        get_text(lang, 'choose_queue', company=comp),
+        reply_markup=queues_kb(mode, comp, lang)
+    )
+    await call.answer()
+
+
+async def back_to_comp(call: types.CallbackQuery):
+    lang = get_user_lang(call.from_user.id)
+    is_view = "view" in call.data
+    prefix = "vcomp_" if is_view else "scomp_"
+    kb = types.InlineKeyboardMarkup(row_width=2)
+    kb.row(
+        types.InlineKeyboardButton(text="ДТЕК", callback_data=f"{prefix}ДТЕК"),
+        types.InlineKeyboardButton(text="ЦЕК", callback_data=f"{prefix}ЦЕК")
+    )
+    if is_view:
+        with get_db() as conn:
+            subs = conn.execute("SELECT company, queue FROM users WHERE user_id=?", (call.from_user.id,)).fetchall()
+        if subs:
+            now_ua = datetime.now(UA_TZ)
+            today_str = now_ua.strftime('%Y-%m-%d')
+            for sub in subs:
+                comp = sub['company']
+                q = sub['queue']
+                kb.add(types.InlineKeyboardButton(text=f"{comp} {q}", callback_data=cb_sched_new(comp, q, today_str)))
+    await call.message.edit_text(get_text(lang, 'choose_comp'), reply_markup=kb, parse_mode="HTML")
+    await call.answer()
+
+
+async def save_sub(call: types.CallbackQuery, scheduler):
+    lang = get_user_lang(call.from_user.id)
+    parsed = parse_callback_data(call.data or "", "menu", 2)
+    if not parsed or parsed[0] != "save":
+        await call.answer()
+        return
+    val = parsed[1].split("_")
+    comp, q = val[0], val[1]
+    with get_db() as conn:
+        try:
+            check = conn.execute(
+                "SELECT id FROM users WHERE user_id = ? AND company = ? AND queue = ?",
+                (call.from_user.id, comp, q)
+            ).fetchone()
+            if check:
+                await call.answer(get_text(lang, 'exists'), show_alert=True)
+                return
+            conn.execute(
+                "INSERT INTO users (user_id, company, queue) VALUES (?, ?, ?)",
+                (call.from_user.id, comp, q)
+            )
+            conn.commit()
+            msg_text = get_text(lang, 'added').format(company=comp, queue=q)
+            await call.answer(msg_text, show_alert=True)
+            await rebuild_jobs(call.bot, scheduler)
+        except Exception:
+            await call.answer(get_text(lang, 'exists'), show_alert=True)
+
+
+async def show_sched(call: types.CallbackQuery):
+    parsed = parse_callback_data(call.data or "", "sched", 3)
+    if not parsed:
+        await call.answer()
+        return
+    comp, q, target_date_str = parsed
+    lang = get_user_lang(call.from_user.id)
+    now_ua = datetime.now(UA_TZ)
+    today_str = now_ua.strftime('%Y-%m-%d')
+    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%Y-%m-%d')
+    db_date_str = target_date_str or today_str
+    display_date_str = format_display_date(db_date_str)
+
+    avaron_mode = False
+    with get_db() as conn:
+        try:
+            res = conn.execute("SELECT value FROM bot_settings WHERE key='avaron'").fetchone()
+            if res and res['value'] == '1':
+                avaron_mode = True
+        except Exception:
+            pass
+    avar_text = f"\n\n{get_text(lang, 'avar_warning')}" if avaron_mode else ""
+
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT off_time, on_time, created_at FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp, q, db_date_str)
+        ).fetchall()
+
+    kb = types.InlineKeyboardMarkup(row_width=1)
+
+    if not rows:
+        schedule_text = (
+            f"<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> "
+            f"{get_text(lang, 'schedule_title', company=comp, queue=q, date=display_date_str)}\n\n"
+            f"{get_text(lang, 'schedule_not_loaded')}{avar_text}\n\n"
+            f"{get_text(lang, 'monitor_link')}\n"
+        )
+    elif rows[0]['off_time'] == 'empty':
+        updated_at = format_display_datetime(rows[0]['created_at']).replace(' ', ' о ', 1)
+        schedule_text = (
+            f"<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> "
+            f"{get_text(lang, 'schedule_title', company=comp, queue=q, date=display_date_str)}\n\n"
+            f"{get_text(lang, 'no_outages_today')}{avar_text}\n\n"
+            f"<i>{get_text(lang, 'updated')} {updated_at}</i>\n\n"
+            f"{get_text(lang, 'monitor_link')}\n"
+        )
+    else:
+        outage_rows = [r for r in rows if r['off_time'] != 'empty']
+        outages = []
+        lines = []
+        total_no_light_minutes = 0
+        for row in outage_rows:
+            off_minutes = minutes_from_str(row['off_time'])
+            on_minutes = minutes_from_str(row['on_time'])
+            duration_minutes = max(0, on_minutes - off_minutes)
+            total_no_light_minutes += duration_minutes
+            outages.append((row['off_time'], row['on_time']))
+            duration_text = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(duration_minutes))
+            lines.append(
+                f"<tg-emoji emoji-id=\"6019346268197759615\">🔌</tg-emoji> "
+                f"{row['off_time']} - {row['on_time']} <i>({duration_text})</i>"
+            )
+        schedule_body = "\n".join(lines)
+        total_light_minutes = max(0, 24 * 60 - total_no_light_minutes)
+        total_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(total_light_minutes))
+        total_no_light = get_text(lang, 'schedule_hours_value', value=_format_hours_decimal(total_no_light_minutes))
+        updated_at = format_display_datetime(rows[0]['created_at']).replace(' ', ' о ', 1)
+        now_time = now_ua.strftime("%H:%M")
+        status_line = get_status_line(outages, now_time, lang)
+        schedule_text = (
+            f"<tg-emoji emoji-id=\"5258105663359294787\">🗓</tg-emoji> "
+            f"{get_text(lang, 'schedule_title', company=comp, queue=q, date=display_date_str)}\n\n"
+            f"{status_line}\n\n"
+            f"{get_text(lang, 'section_outages')}\n{schedule_body}\n\n"
+            f"{get_text(lang, 'section_stats')}\n"
+            f"{get_text(lang, 'stats_light', value=total_light)}\n"
+            f"{get_text(lang, 'stats_no_light', value=total_no_light)}{avar_text}\n\n"
+            f"<i>{get_text(lang, 'updated')} {updated_at}</i>\n\n"
+            f"{get_text(lang, 'monitor_link')}\n"
+        )
+
+    if db_date_str == today_str:
+        kb.add(types.InlineKeyboardButton(
+            text=get_text(lang, 'tomorrow_label'),
+            callback_data=cb_sched_new(comp, q, tomorrow_str),
+            style="primary"
+        ))
+    else:
+        kb.add(types.InlineKeyboardButton(
+            text=get_text(lang, 'today_label'),
+            callback_data=cb_sched_new(comp, q, today_str),
+            style="primary"
+        ))
+    kb.add(types.InlineKeyboardButton(
+        text=get_text(lang, 'back'),
+        callback_data=f"vcomp_{comp}",
+        style="danger"
+    ))
+
+    try:
+        await call.message.edit_text(schedule_text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+    except Exception:
+        pass
+    await call.answer()
+
+
+async def my_queues(message: types.Message):
+    lang = get_user_lang(message.from_user.id)
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, company, queue FROM users WHERE user_id=?", (message.from_user.id,)).fetchall()
+    if not rows:
+        return await message.answer(get_text(lang, 'empty_list'))
+    kb = types.InlineKeyboardMarkup()
+    for r in rows:
+        kb.add(types.InlineKeyboardButton(
+            text=f"🗑 {r['company']} {r['queue']}",
+            callback_data=f"del_{r['id']}",
+            style="danger"
+        ))
+    await message.answer(get_text(lang, 'my_que'), reply_markup=kb)
+
+
+async def delete_sub(call: types.CallbackQuery, scheduler):
+    lang = get_user_lang(call.from_user.id)
+    try:
+        sub_id = call.data.split("_", 1)[1]
+    except Exception:
+        msg = get_text(lang, "invalid_data") if get_text else "Невірні дані"
+        await call.answer(msg, show_alert=True)
+        return
+    with get_db() as conn:
+        conn.execute("DELETE FROM users WHERE id=?", (sub_id,))
+        conn.commit()
+    await call.answer(get_text(lang, 'deleted'), show_alert=False)
+    try:
+        await rebuild_jobs(call.bot, scheduler)
+    except Exception:
+        pass
+    with get_db() as conn:
+        rows = conn.execute("SELECT id, company, queue FROM users WHERE user_id=?", (call.from_user.id,)).fetchall()
+    if not rows:
+        new_text = get_text(lang, 'empty_list')
+        new_kb = None
+    else:
+        new_text = get_text(lang, 'my_que')
+        new_kb = types.InlineKeyboardMarkup()
+        for r in rows:
+            new_kb.add(types.InlineKeyboardButton(
+                text=f"🗑 {r['company']} {r['queue']}",
+                callback_data=f"del_{r['id']}"
+            ))
+    try:
+        await call.message.edit_text(text=new_text, reply_markup=new_kb, parse_mode='HTML')
+    except Exception:
+        pass
+
+
 async def compare_menu(message: types.Message):
     lang = get_user_lang(message.from_user.id)
-    # Змінюємо ReplyKeyboardMarkup на InlineKeyboardMarkup
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(
         types.InlineKeyboardButton(text=get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
@@ -280,16 +650,17 @@ async def compare_menu(message: types.Message):
     )
     await message.answer(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
 
+
 async def compare_new_start(call: types.CallbackQuery):
     user_id = call.from_user.id
     COMPARE_STATE.pop(user_id, None)
     lang = get_user_lang(user_id)
     kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton(text="ДТЕК", callback_data=f"cmp_c1|ДТЕК"),
-           types.InlineKeyboardButton(text="ЦЕК", callback_data=f"cmp_c1|ЦЕК"))
+    kb.add(
+        types.InlineKeyboardButton(text="ДТЕК", callback_data="cmp_c1|ДТЕК"),
+        types.InlineKeyboardButton(text="ЦЕК", callback_data="cmp_c1|ЦЕК")
+    )
     kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
-    
-    # Використовуємо edit_text
     await call.message.edit_text(get_text(lang, 'cmp_choose_first'), reply_markup=kb)
     await call.answer()
 
@@ -300,208 +671,42 @@ async def compare_my_list(call: types.CallbackQuery):
     rows = list_user_compares(user_id)
     kb = types.InlineKeyboardMarkup(row_width=1)
     if not rows:
-        kb2 = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
+        kb2 = types.InlineKeyboardMarkup().add(
+            types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu")
+        )
         await call.message.edit_text(get_text(lang, 'cmp_no_saved'), reply_markup=kb2)
         await call.answer()
         return
     for r in rows:
         name = r['name'] or f"{r['comp1']} {r['queue1']} + {r['comp2']} {r['queue2']}"
-        kb.add(types.InlineKeyboardButton(text=f"{name}", callback_data=f"cmp_run_saved|{r['id']}|today"))
+        kb.add(types.InlineKeyboardButton(text=name, callback_data=f"cmp_run_saved|{r['id']}|today"))
     kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
-    
-    # Використовуємо edit_text
     await call.message.edit_text(get_text(lang, 'cmp_list_header'), reply_markup=kb)
     await call.answer()
 
 
-# Router for inline callbacks related to compare
-async def compare_callback_router(call: types.CallbackQuery):
-    data = call.data or ""
-    user_id = call.from_user.id
-    lang = get_user_lang(user_id)
-
-    # --- НОВІ ОБРОБНИКИ ДЛЯ КНОПОК МЕНЮ ---
-    if data == "cmp_start_new":
-        await compare_new_start(call)
-        return
-
-    if data == "cmp_start_my":
-        await compare_my_list(call)
-        return
-
-    # Back to compare menu
-    if data == "cmp_back_to_compare_menu":
-        # show compare menu (INLINE keyboard)
-        kb = types.InlineKeyboardMarkup(row_width=1)
-        kb.add(
-            types.InlineKeyboardButton(text=get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
-            types.InlineKeyboardButton(text=get_text(lang, 'btn_compare_my'), callback_data="cmp_start_my")
-        )
-        try:
-            await call.message.edit_text(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
-        except Exception:
-            await call.message.answer(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
-        await call.answer()
-        return
-
-    # Back to company selection for c1/c2
-    if data == "cmp_back_to_c1":
-        kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton(text="ДТЕК", callback_data=f"cmp_c1|ДТЕК"),
-               types.InlineKeyboardButton(text="ЦЕК", callback_data=f"cmp_c1|ЦЕК"))
-        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
-        await call.message.edit_text(get_text(lang, 'cmp_choose_first'), reply_markup=kb)
-        await call.answer()
-        return
-    if data == "cmp_back_to_c2":
-        # if first is chosen, we still ask second company
-        kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton(text="ДТЕК", callback_data="cmp_c2|ДТЕК"),
-               types.InlineKeyboardButton(text="ЦЕК", callback_data="cmp_c2|ЦЕК"))
-        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
-        await call.message.edit_text(get_text(lang, 'cmp_choose_second'), reply_markup=kb)
-        await call.answer()
-        return
-
-    # cmp_c1|COMP
-    if data.startswith("cmp_c1|"):
-        _, comp = data.split("|", 1)
-        await call.message.edit_text(get_text(lang, 'choose_queue', company=comp), reply_markup=queues_kb_for_compare(comp, lang, 'c1'))
-        await call.answer()
-        return
-
-    # cmp_q1|COMP|Q
-    if data.startswith("cmp_q1|"):
-        try:
-            _, comp, q = data.split("|", 2)
-        except ValueError:
-            await call.answer("Invalid data", show_alert=True)
-            return
-        COMPARE_STATE[user_id] = {'first': (comp, q)}
-        kb = types.InlineKeyboardMarkup()
-        kb.add(types.InlineKeyboardButton(text="ДТЕК", callback_data="cmp_c2|ДТЕК"),
-               types.InlineKeyboardButton(text="ЦЕК", callback_data="cmp_c2|ЦЕК"))
-        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_c1"))
-        await call.message.edit_text(get_text(lang, 'cmp_choose_second'), reply_markup=kb)
-        await call.answer()
-        return
-
-    # cmp_c2|COMP
-    if data.startswith("cmp_c2|"):
-        _, comp = data.split("|", 1)
-        await call.message.edit_text(get_text(lang, 'choose_queue', company=comp), reply_markup=queues_kb_for_compare(comp, lang, 'c2'))
-        await call.answer()
-        return
-
-    # cmp_q2|COMP|Q
-    if data.startswith("cmp_q2|"):
-        try:
-            _, comp, q = data.split("|", 2)
-        except ValueError:
-            await call.answer("Invalid data", show_alert=True)
-            return
-        state = COMPARE_STATE.get(user_id)
-        if not state or 'first' not in state:
-            await call.answer(get_text(lang, 'cmp_error_restart'), show_alert=True)
-            return
-        state['second'] = (comp, q)
-        comp1, q1 = state['first']
-        comp2, q2 = state['second']
-        kb = types.InlineKeyboardMarkup(row_width=2)
-        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today"),
-               types.InlineKeyboardButton(text=get_text(lang, 'tomorrow_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|tomorrow"))
-        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'cmp_save_button'), callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}"))
-        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_c2"))
-        await call.message.edit_text(get_text(lang, 'cmp_ready_preview', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2), reply_markup=kb)
-        await call.answer()
-        return
-
-    # cmp_run|comp1|q1|comp2|q2|day
-    if data.startswith("cmp_run|"):
-        parts = data.split("|")
-        if len(parts) != 6:
-            await call.answer("Invalid data", show_alert=True)
-            return
-        _, comp1, q1, comp2, q2, day = parts
-        await run_compare_and_show(call, comp1, q1, comp2, q2, day, lang)
-        await call.answer()
-        return
-
-    # cmp_save|comp1|q1|comp2|q2
-    if data.startswith("cmp_save|"):
-        _, comp1, q1, comp2, q2 = data.split("|")
-        # Ограничение: максимум 5 сохранённых сравнений на пользователя
-        limit = 5
-        if count_user_compares(user_id) >= limit:
-            await call.answer(get_text(lang, 'cmp_limit_reached', limit=limit), show_alert=True)
-            return
-    
-        name = f"{comp1} {q1} + {comp2} {q2}"
-        try:
-            save_compare_to_db(user_id, name, comp1, q1, comp2, q2)
-            await call.answer(get_text(lang, 'cmp_saved_ok'), show_alert=True)
-            await call.message.edit_text(
-                get_text(lang, 'cmp_saved_msg', name=name),
-                reply_markup=types.InlineKeyboardMarkup().add(
-                    types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu")
-                )
-            )
-        except Exception:
-            await call.answer(get_text(lang, 'cmp_saved_fail'), show_alert=True)
-        return
-
-    # cmp_run_saved|id|day
-    if data.startswith("cmp_run_saved|"):
-        _, cid, day = data.split("|")
-        row = get_compare_by_id(int(cid))
-        if not row:
-            await call.answer(get_text(lang, 'cmp_no_saved'), show_alert=True)
-            return
-        comp1, q1, comp2, q2 = row['comp1'], row['queue1'], row['comp2'], row['queue2']
-        await run_compare_and_show(call, comp1, q1, comp2, q2, day, lang, saved_id=row['id'])
-        await call.answer()
-        return
-
-    # cmp_del|id
-    if data.startswith("cmp_del|"):
-        _, cid = data.split("|")
-        delete_compare_by_id(int(cid))
-        await call.answer(get_text(lang, 'cmp_deleted_ok'), show_alert=True)
-        # show updated list
-        await compare_my_list(call)
-        return
-
-    # cmp_details|comp1|q1|comp2|q2|day
-    if data.startswith("cmp_details|"):
-        parts = data.split("|")
-        if len(parts) != 6:
-            await call.answer("Invalid data", show_alert=True)
-            return
-        _, comp1, q1, comp2, q2, day = parts
-        await show_compare_details(call, comp1, q1, comp2, q2, day, lang)
-        await call.answer()
-        return
-
-    await call.answer()
-
-
-# Сборка и показ результата сравнения
 async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, day, lang, saved_id=None):
     now = datetime.now(UA_TZ)
-    if day == 'tomorrow':
-        target_date = (now + timedelta(days=1)).date()
-    else:
-        target_date = now.date()
+    target_date = (now + timedelta(days=1)).date() if day == 'tomorrow' else now.date()
     date_str = target_date.strftime('%Y-%m-%d')
 
     with get_db() as conn:
-        rows1 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp1, q1, date_str)).fetchall()
-        rows2 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp2, q2, date_str)).fetchall()
+        rows1 = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp1, q1, date_str)
+        ).fetchall()
+        rows2 = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp2, q2, date_str)
+        ).fetchall()
 
     if not rows1 or not rows2:
         kb = types.InlineKeyboardMarkup()
         if day == 'tomorrow':
-            kb.add(types.InlineKeyboardButton(text=get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today"))
+            kb.add(types.InlineKeyboardButton(
+                text=get_text(lang, 'today_label'),
+                callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today"
+            ))
         kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
         await call.message.edit_text(
             get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
@@ -529,11 +734,12 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
     ons1 = invert_intervals(merged_offs1)
     ons2 = invert_intervals(merged_offs2)
     common = intersect_intervals(ons1, ons2)
-
     common = [(s, e) for (s, e) in common if not (s == 1439 and e == 1440) and (e - s) > 0]
 
     if not common:
-        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
+        kb = types.InlineKeyboardMarkup().add(
+            types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu")
+        )
         await call.message.edit_text(
             get_text(lang, 'cmp_no_common', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
             reply_markup=kb
@@ -551,52 +757,62 @@ async def run_compare_and_show(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         f'<tg-emoji emoji-id="6023761060786346622">⚡️</tg-emoji> {format_minutes(s)} - {format_minutes(e)} <i>({format_duration_with_locale(e - s)})</i>'
         for s, e in common
     ]
-
-    header = get_text(lang, 'cmp_result_header', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str))
-
-    # ВАЖНО: tg://resolve не создает web preview
+    header = get_text(
+        lang, 'cmp_result_header',
+        comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)
+    )
     monitor_line = '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="tg://resolve?domain=lightmeuaBot"><b>Монітор світла</b></a>'
-
     text = f"{header}\n\n" + "\n".join(lines) + f"\n\n{monitor_line}"
 
     kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'cmp_details_button'), callback_data=f"cmp_details|{comp1}|{q1}|{comp2}|{q2}|{day}"))
+    kb.add(types.InlineKeyboardButton(
+        text=get_text(lang, 'cmp_details_button'),
+        callback_data=f"cmp_details|{comp1}|{q1}|{comp2}|{q2}|{day}"
+    ))
     other_day = 'tomorrow' if day == 'today' else 'today'
-    kb.add(
-        types.InlineKeyboardButton(text=get_text(lang, 'toggle_day_label', day=(get_text(lang, 'tomorrow_label') if other_day == 'tomorrow' else get_text(lang, 'today_label'))),
-            callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{other_day}",
-            style="primary"
-        )
-    )
+    kb.add(types.InlineKeyboardButton(
+        text=get_text(
+            lang, 'toggle_day_label',
+            day=(get_text(lang, 'tomorrow_label') if other_day == 'tomorrow' else get_text(lang, 'today_label'))
+        ),
+        callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{other_day}",
+        style="primary"
+    ))
     if not saved_id:
-        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'cmp_save_button'), callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}"))
+        kb.add(types.InlineKeyboardButton(
+            text=get_text(lang, 'cmp_save_button'),
+            callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}"
+        ))
     else:
-        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'cmp_delete_saved'), callback_data=f"cmp_del|{saved_id}"))
+        kb.add(types.InlineKeyboardButton(
+            text=get_text(lang, 'cmp_delete_saved'),
+            callback_data=f"cmp_del|{saved_id}"
+        ))
     kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
-
     await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
 
 
-# Details page (shows both original ON-intervals and marks common ones with ✅)
 async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, day, lang):
     now = datetime.now(UA_TZ)
-    if day == 'tomorrow':
-        target_date = (now + timedelta(days=1)).date()
-    else:
-        target_date = now.date()
+    target_date = (now + timedelta(days=1)).date() if day == 'tomorrow' else now.date()
     date_str = target_date.strftime('%Y-%m-%d')
 
     with get_db() as conn:
-        rows1 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp1, q1, date_str)).fetchall()
-        rows2 = conn.execute("SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?", (comp2, q2, date_str)).fetchall()
+        rows1 = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp1, q1, date_str)
+        ).fetchall()
+        rows2 = conn.execute(
+            "SELECT off_time, on_time FROM schedules WHERE company=? AND queue=? AND date=?",
+            (comp2, q2, date_str)
+        ).fetchall()
 
     if not rows1 or not rows2:
-        kb = types.InlineKeyboardMarkup().add(
-            types.InlineKeyboardButton(text=get_text(lang, 'back'),
-                callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}",
-                style="danger"
-            )
-        )
+        kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(
+            text=get_text(lang, 'back'),
+            callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}",
+            style="danger"
+        ))
         await call.message.edit_text(
             get_text(lang, 'cmp_no_data', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)),
             reply_markup=kb
@@ -629,532 +845,193 @@ async def show_compare_details(call: types.CallbackQuery, comp1, q1, comp2, q2, 
         offs = build_offs(rows)
         if not offs:
             return get_text(lang, 'no_outages')
-
         lines = []
         for s, e in offs:
             if (s == 1439 and e == 1440) or (e - s) <= 0:
                 continue
             lines.append(
-                f'<tg-emoji emoji-id="6019346268197759615">🔌</tg-emoji> {format_minutes(s)} - {format_minutes(e)} '
-                f'<i>({format_duration_with_locale(e - s)})</i>'
+                f'<tg-emoji emoji-id="6019346268197759615">🔌</tg-emoji> '
+                f'{format_minutes(s)} - {format_minutes(e)} <i>({format_duration_with_locale(e - s)})</i>'
             )
         return "\n".join(lines) if lines else get_text(lang, 'no_outages')
 
     left = format_outages(rows1)
     right = format_outages(rows2)
-
     header = get_text(
-        lang,
-        'cmp_details_header',
+        lang, 'cmp_details_header',
         comp1=comp1, queue1=q1, comp2=comp2, queue2=q2, date=format_display_date(date_str)
     )
-
-    # Без web preview
     monitor_line = '<tg-emoji emoji-id="5280504819751101776">🤩</tg-emoji> <a href="tg://resolve?domain=lightmeuaBot"><b>Монітор світла</b></a>'
-
     text = (
         f"{header}\n\n"
         f"{get_text(lang, 'cmp_original_1', comp=comp1, queue=q1)}\n{left}\n\n"
         f"{get_text(lang, 'cmp_original_2', comp=comp2, queue=q2)}\n{right}\n\n"
         f"{monitor_line}"
     )
-
-    kb = types.InlineKeyboardMarkup().add(
-        types.InlineKeyboardButton(text=get_text(lang, 'back'),
-            callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}",
-            style="danger"
-        )
-    )
+    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(
+        text=get_text(lang, 'back'),
+        callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|{day}",
+        style="danger"
+    ))
     await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
-    
-async def show_main_menu_msg(message: types.Message):
-    lang = get_user_lang(message.from_user.id)
-    try:
-        await message.answer(get_text(lang, 'menu_main'), reply_markup=main_menu_kb(lang))
-    except Exception:
-        await message.answer(get_text(lang, 'menu_main'))
 
-def get_user_lang(user_id):
-    with get_db() as conn:
-        res = conn.execute("SELECT language FROM user_prefs WHERE user_id = ?", (user_id,)).fetchone()
-        return res['language'] if res else 'uk'
 
-def lang_kb():
-    kb = types.InlineKeyboardMarkup()
-    kb.add(types.InlineKeyboardButton(text="🇺🇦 Українська", callback_data=cb_lang_new("uk")),
-           types.InlineKeyboardButton(text="🇷🇺 Русский", callback_data=cb_lang_new("ru")))
-    return kb
-
-def queues_kb(action_type, company, lang):
-    queues = ["1.1", "1.2", "2.1", "2.2", "3.1", "3.2", "4.1", "4.2", "5.1", "5.2", "6.1", "6.2"]
-    kb = types.InlineKeyboardMarkup(row_width=3)
-    btns = []
-    
-    # Получаем текущую дату для инициализации кнопок просмотра
-    today_str = datetime.now(UA_TZ).strftime('%Y-%m-%d')
-    
-    for q in queues:
-        if action_type == 'view':
-            # Передаем дату в колбэк
-            btns.append(types.InlineKeyboardButton(text=q, callback_data=cb_sched_new(company, q, today_str)))
-        else:
-            btns.append(types.InlineKeyboardButton(text=q, callback_data=cb_menu_new('save', f"{company}_{q}")))
-    kb.add(*btns)
-    back_call = "back_view" if action_type == 'view' else "back_sub"
-    kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data=back_call))
-    return kb
-
-# --- Обработчики ---
-async def check_time_cmd(message: types.Message):
-    now = datetime.now(UA_TZ).strftime('%d.%m.%Y %H:%M:%S')
-    await message.answer(f"Server time (Europe/Kyiv): {now}")
-
-async def start_cmd(message: types.Message):
-    await message.answer(get_text('uk', 'select_lang'), reply_markup=lang_kb())
-
-async def set_language(call: types.CallbackQuery):
-    parsed = parse_callback_data(call.data or "", "lang", 1)
-    if not parsed:
-        await call.answer()
-        return
-    lang = parsed[0]
-    with get_db() as conn:
-        conn.execute("INSERT OR REPLACE INTO user_prefs (user_id, language) VALUES (?, ?)", (call.from_user.id, lang))
-        conn.commit()
-    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(text=get_text(lang, 'sub_btn'), url=config.CHANNEL_URL)).add(types.InlineKeyboardButton(text=get_text(lang, 'continue_btn'), callback_data="menu_start"))
-    try:
-        await call.message.edit_text(get_text(lang, 'lang_set'))
-    except Exception:
-        await call.message.answer(get_text(lang, 'lang_set'))
-    await call.message.answer(get_text(lang, 'sub_recommend'), reply_markup=kb, disable_web_page_preview=True)
-    await call.answer()
-
-async def show_main_menu(call: types.CallbackQuery):
-    lang = get_user_lang(call.from_user.id)
-    await call.message.answer(get_text(lang, 'menu_main'), reply_markup=main_menu_kb(lang))
-    await call.answer()
-
-async def view_schedules_start(call_or_msg):
-    # Визначаємо, звідки прийшов запит (кнопка чи команда /sched)
-    if isinstance(call_or_msg, types.CallbackQuery):
-        user_id = call_or_msg.from_user.id
-        message = call_or_msg.message
-    else:
-        user_id = call_or_msg.from_user.id
-        message = call_or_msg
-
+async def compare_callback_router(call: types.CallbackQuery):
+    data = call.data or ""
+    user_id = call.from_user.id
     lang = get_user_lang(user_id)
-    
-    # Створюємо клавіатуру
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    
-    # Основні кнопки компаній
-    btn_dtek = types.InlineKeyboardButton(text="ДТЕК", callback_data="vcomp_ДТЕК")
-    btn_cek = types.InlineKeyboardButton(text="ЦЕК", callback_data="vcomp_ЦЕК")
-    kb.row(btn_dtek, btn_cek)
-    
-    # Отримуємо підписки користувача з БД
-    with get_db() as conn:
-        subs = conn.execute("SELECT company, queue FROM users WHERE user_id=?", (user_id,)).fetchall()
-    
-    # Додаємо кнопки підписок, якщо вони є
-    if subs:
-        now_ua = datetime.now(UA_TZ)
-        today_str = now_ua.strftime('%Y-%m-%d')
-        
-        for sub in subs:
-            comp = sub['company']
-            q = sub['queue']
-            # Прибрали глазик
-            kb.add(
-                types.InlineKeyboardButton(text=f"{comp} {q}", 
-                    callback_data=cb_sched_new(comp, q, today_str)
-                )
-            )
 
-    # Текст повідомлення (використовуємо правильний ключ 'choose_comp')
-    text = get_text(lang, 'choose_comp')
-
-    # Відправляємо або редагуємо повідомлення
-    if isinstance(call_or_msg, types.CallbackQuery):
-        await message.edit_text(text, reply_markup=kb, parse_mode="HTML")
-        await call_or_msg.answer()
-    else:
-        await message.answer(text, reply_markup=kb, parse_mode="HTML")
-
-async def add_queue_btn(message: types.Message):
-    lang = get_user_lang(message.from_user.id)
-    kb = types.InlineKeyboardMarkup().add(types.InlineKeyboardButton(text="ДТЕК", callback_data="scomp_ДТЕК"), types.InlineKeyboardButton(text="ЦЕК", callback_data="scomp_ЦЕК"))
-    await message.answer(get_text(lang, 'choose_comp'), reply_markup=kb)
-
-async def handle_comp_selection(call: types.CallbackQuery):
-    lang = get_user_lang(call.from_user.id)
-    try:
-        action, comp = call.data.split("_", 1)
-    except Exception:
-        await call.answer("Невірні дані", show_alert=True)
+    if data == "cmp_start_new":
+        await compare_new_start(call)
         return
-    mode = 'view' if action == 'vcomp' else 'save'
-    await call.message.edit_text(get_text(lang, 'choose_queue', company=comp), reply_markup=queues_kb(mode, comp, lang))
-    await call.answer()
-
-async def back_to_comp(call: types.CallbackQuery):
-    lang = get_user_lang(call.from_user.id)
-    is_view = "view" in call.data
-    prefix = "vcomp_" if is_view else "scomp_"
-    
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.row(
-        types.InlineKeyboardButton(text="ДТЕК", callback_data=f"{prefix}ДТЕК"),
-        types.InlineKeyboardButton(text="ЦЕК", callback_data=f"{prefix}ЦЕК")
-    )
-
-    # Якщо це повернення в меню ПЕРЕГЛЯДУ графіків, додаємо підписки
-    if is_view:
-        with get_db() as conn:
-            subs = conn.execute("SELECT company, queue FROM users WHERE user_id=?", (call.from_user.id,)).fetchall()
-        
-        if subs:
-            now_ua = datetime.now(UA_TZ)
-            today_str = now_ua.strftime('%Y-%m-%d')
-            
-            for sub in subs:
-                comp = sub['company']
-                q = sub['queue']
-                kb.add(
-                    types.InlineKeyboardButton(text=f"{comp} {q}", 
-                        callback_data=cb_sched_new(comp, q, today_str)
-                    )
-                )
-
-    await call.message.edit_text(get_text(lang, 'choose_comp'), reply_markup=kb, parse_mode="HTML")
-    await call.answer()
-
-async def save_sub(call: types.CallbackQuery, scheduler):
-    lang = get_user_lang(call.from_user.id)
-    parsed = parse_callback_data(call.data or "", "menu", 2)
-    if not parsed or parsed[0] != "save":
-        await call.answer()
+    if data == "cmp_start_my":
+        await compare_my_list(call)
         return
-    val = parsed[1].split("_")
-    comp, q = val[0], val[1]
-    
-    with get_db() as conn:
+    if data == "cmp_back_to_compare_menu":
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        kb.add(
+            types.InlineKeyboardButton(text=get_text(lang, 'btn_compare_new'), callback_data="cmp_start_new"),
+            types.InlineKeyboardButton(text=get_text(lang, 'btn_compare_my'), callback_data="cmp_start_my")
+        )
         try:
-            check = conn.execute(
-                "SELECT id FROM users WHERE user_id = ? AND company = ? AND queue = ?", 
-                (call.from_user.id, comp, q)
-            ).fetchone()
-            
-            if check:
-                await call.answer(get_text(lang, 'exists'), show_alert=True)
-                return
-
-            conn.execute(
-                "INSERT INTO users (user_id, company, queue) VALUES (?, ?, ?)", 
-                (call.from_user.id, comp, q)
-            )
-            conn.commit()
-            
-            msg_text = get_text(lang, 'added').format(company=comp, queue=q)
-            await call.answer(msg_text, show_alert=True)
-            
-            # --- Правильное обновление планировщика ---
-            from services.scheduler import rebuild_jobs
-            await rebuild_jobs(call.bot, scheduler)
-            
-        except Exception as e:
-            print(f"Database error: {e}")
-            await call.answer(get_text(lang, 'exists'), show_alert=True)
-
-def format_remaining_time(minutes, lang):
-    hours = minutes // 60
-    mins = minutes % 60
-
-    parts = []
-
-    if hours > 0:
-        if lang == "ru":
-            parts.append(f"{hours} ч.")
-        else:
-            parts.append(f"{hours} год.")
-
-    if mins > 0:
-        if lang == "ru":
-            parts.append(f"{mins} мин.")
-        else:
-            parts.append(f"{mins} хв.")
-
-    return " ".join(parts)
-
-
-def get_status_line(outages, now_time, lang):
-    now_minutes = minutes_from_str(now_time)
-
-    for off, on in outages:
-        off_m = minutes_from_str(off)
-        on_m = minutes_from_str(on)
-
-        if off_m <= now_minutes < on_m:
-            remain = on_m - now_minutes
-            remain_text = format_remaining_time(remain, lang)
-
-            return get_text(
-                lang,
-                'status_no_light_until',
-                time=on,
-                remain=remain_text
-            )
-
-    for off, on in outages:
-        off_m = minutes_from_str(off)
-
-        if now_minutes < off_m:
-            remain = off_m - now_minutes
-            remain_text = format_remaining_time(remain, lang)
-
-            return get_text(
-                lang,
-                'status_light_until',
-                time=off,
-                remain=remain_text
-            )
-
-    return get_text(lang, 'status_light_now')
-
-# Обновленная функция просмотра графиков с кнопками Сегодня/Завтра
-async def show_sched(call: types.CallbackQuery):
-    parsed = parse_callback_data(call.data or "", "sched", 3)
-    if not parsed:
-        await call.answer()
-        return
-    comp, q, target_date_str = parsed
-    lang = get_user_lang(call.from_user.id)
-
-    now_ua = datetime.now(UA_TZ)
-    today_str = now_ua.strftime('%Y-%m-%d')
-    tomorrow_str = (now_ua + timedelta(days=1)).strftime('%Y-%m-%d')
-
-    db_date_str = target_date_str or today_str
-    display_date_str = format_display_date(db_date_str)
-
-    # --- ЗЧИТУЄМО СТАН АВАРІЙНИХ ВІДКЛЮЧЕНЬ ---
-    avaron_mode = False
-    with get_db() as conn:
-        try:
-            res = conn.execute("SELECT value FROM bot_settings WHERE key='avaron'").fetchone()
-            if res and res['value'] == '1':
-                avaron_mode = True
+            await call.message.edit_text(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
         except Exception:
-            pass
-
-    avar_text = f"\n\n{get_text(lang, 'avar_warning')}" if avaron_mode else ""
-    # ------------------------------------------
-
-    with get_db() as conn:
-        rows = conn.execute(
-            "SELECT off_time, on_time, created_at FROM schedules WHERE company=? AND queue=? AND date=?",
-            (comp, q, db_date_str)
-        ).fetchall()
-
-    kb = types.InlineKeyboardMarkup(row_width=1)
-
-
-    if not rows:
-        schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
-
-{get_text(lang,'schedule_not_loaded')}{avar_text}
-
-{get_text(lang,'monitor_link')}
-"""
-        
-    elif rows[0]['off_time'] == 'empty':
-        updated_at = format_display_datetime(rows[0]['created_at']).replace(' ', ' о ', 1)
-
-        schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
-
-{get_text(lang,'no_outages_today')}{avar_text}
-
-<i>{get_text(lang,'updated')} {updated_at}</i>
-
-{get_text(lang,'monitor_link')}
-"""
-
-    else:
-        outage_rows = [r for r in rows if r['off_time'] != 'empty']
-
-        outages = []
-        lines = []
-        total_no_light_minutes = 0
-
-        for row in outage_rows:
-            off_minutes = minutes_from_str(row['off_time'])
-            on_minutes = minutes_from_str(row['on_time'])
-
-            duration_minutes = max(0, on_minutes - off_minutes)
-            total_no_light_minutes += duration_minutes
-
-            outages.append((row['off_time'], row['on_time']))
-
-            duration_text = get_text(
-                lang,
-                'schedule_hours_value',
-                value=_format_hours_decimal(duration_minutes)
-            )
-
-            lines.append(
-                f"""<tg-emoji emoji-id="6019346268197759615">🔌</tg-emoji> {row['off_time']} - {row['on_time']} <i>({duration_text})</i>"""
-            )
-
-        schedule_body = "\n".join(lines)
-
-        total_light_minutes = max(0, 24*60 - total_no_light_minutes)
-
-        total_light = get_text(
-            lang,
-            'schedule_hours_value',
-            value=_format_hours_decimal(total_light_minutes)
-        )
-
-        total_no_light = get_text(
-            lang,
-            'schedule_hours_value',
-            value=_format_hours_decimal(total_no_light_minutes)
-        )
-
-        updated_at = format_display_datetime(rows[0]['created_at']).replace(' ', ' о ', 1)
-        now_time = now_ua.strftime("%H:%M")
-        status_line = get_status_line(outages, now_time, lang)
-
-        schedule_text = f"""<tg-emoji emoji-id="5258105663359294787">🗓</tg-emoji> {get_text(lang,'schedule_title',company=comp,queue=q,date=display_date_str)}
-
-{status_line}
-
-{get_text(lang,'section_outages')}
-{schedule_body}
-
-{get_text(lang,'section_stats')}
-{get_text(lang,'stats_light',value=total_light)}
-{get_text(lang,'stats_no_light',value=total_no_light)}{avar_text}
-
-<i>{get_text(lang,'updated')} {updated_at}</i>
-
-{get_text(lang,'monitor_link')}
-"""
-
-    # --- КНОПКИ ---
-    if db_date_str == today_str:
-        kb.add(
-            types.InlineKeyboardButton(text=get_text(lang,'tomorrow_label'),
-                callback_data=cb_sched_new(comp, q, tomorrow_str),
-                style="primary"
-            )
-        )
-    else:
-        kb.add(
-            types.InlineKeyboardButton(text=get_text(lang,'today_label'),
-                callback_data=cb_sched_new(comp, q, today_str),
-                style="primary"
-            )
-        )
-
-    kb.add(
-        types.InlineKeyboardButton(text=get_text(lang,'back'),
-            callback_data=f"vcomp_{comp}",
-            style="danger"
-        )
-    )
-
-    try:
-        await call.message.edit_text(
-            schedule_text,
-            reply_markup=kb,
-            parse_mode="HTML",
-            disable_web_page_preview=True
-        )
-    except Exception:
+            await call.message.answer(get_text(lang, 'cmp_menu_text'), reply_markup=kb)
         await call.answer()
-
+        return
+    if data == "cmp_back_to_c1":
+        kb = types.InlineKeyboardMarkup()
+        kb.add(
+            types.InlineKeyboardButton(text="ДТЕК", callback_data="cmp_c1|ДТЕК"),
+            types.InlineKeyboardButton(text="ЦЕК", callback_data="cmp_c1|ЦЕК")
+        )
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
+        await call.message.edit_text(get_text(lang, 'cmp_choose_first'), reply_markup=kb)
+        await call.answer()
+        return
+    if data == "cmp_back_to_c2":
+        kb = types.InlineKeyboardMarkup()
+        kb.add(
+            types.InlineKeyboardButton(text="ДТЕК", callback_data="cmp_c2|ДТЕК"),
+            types.InlineKeyboardButton(text="ЦЕК", callback_data="cmp_c2|ЦЕК")
+        )
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu"))
+        await call.message.edit_text(get_text(lang, 'cmp_choose_second'), reply_markup=kb)
+        await call.answer()
+        return
+    if data.startswith("cmp_c1|"):
+        _, comp = data.split("|", 1)
+        await call.message.edit_text(
+            get_text(lang, 'choose_queue', company=comp),
+            reply_markup=queues_kb_for_compare(comp, lang, 'c1')
+        )
+        await call.answer()
+        return
+    if data.startswith("cmp_q1|"):
+        try:
+            _, comp, q = data.split("|", 2)
+        except ValueError:
+            await call.answer("Invalid data", show_alert=True)
+            return
+        COMPARE_STATE[user_id] = {'first': (comp, q)}
+        kb = types.InlineKeyboardMarkup()
+        kb.add(
+            types.InlineKeyboardButton(text="ДТЕК", callback_data="cmp_c2|ДТЕК"),
+            types.InlineKeyboardButton(text="ЦЕК", callback_data="cmp_c2|ЦЕК")
+        )
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_c1"))
+        await call.message.edit_text(get_text(lang, 'cmp_choose_second'), reply_markup=kb)
+        await call.answer()
+        return
+    if data.startswith("cmp_c2|"):
+        _, comp = data.split("|", 1)
+        await call.message.edit_text(
+            get_text(lang, 'choose_queue', company=comp),
+            reply_markup=queues_kb_for_compare(comp, lang, 'c2')
+        )
+        await call.answer()
+        return
+    if data.startswith("cmp_q2|"):
+        try:
+            _, comp, q = data.split("|", 2)
+        except ValueError:
+            await call.answer("Invalid data", show_alert=True)
+            return
+        state = COMPARE_STATE.get(user_id)
+        if not state or 'first' not in state:
+            await call.answer(get_text(lang, 'cmp_error_restart'), show_alert=True)
+            return
+        state['second'] = (comp, q)
+        comp1, q1 = state['first']
+        comp2, q2 = state['second']
+        kb = types.InlineKeyboardMarkup(row_width=2)
+        kb.add(
+            types.InlineKeyboardButton(text=get_text(lang, 'today_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|today"),
+            types.InlineKeyboardButton(text=get_text(lang, 'tomorrow_label'), callback_data=f"cmp_run|{comp1}|{q1}|{comp2}|{q2}|tomorrow")
+        )
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'cmp_save_button'), callback_data=f"cmp_save|{comp1}|{q1}|{comp2}|{q2}"))
+        kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_c2"))
+        await call.message.edit_text(
+            get_text(lang, 'cmp_ready_preview', comp1=comp1, queue1=q1, comp2=comp2, queue2=q2),
+            reply_markup=kb
+        )
+        await call.answer()
+        return
+    if data.startswith("cmp_run|"):
+        parts = data.split("|")
+        if len(parts) != 6:
+            await call.answer("Invalid data", show_alert=True)
+            return
+        _, comp1, q1, comp2, q2, day = parts
+        await run_compare_and_show(call, comp1, q1, comp2, q2, day, lang)
+        await call.answer()
+        return
+    if data.startswith("cmp_save|"):
+        _, comp1, q1, comp2, q2 = data.split("|")
+        limit = 5
+        if count_user_compares(user_id) >= limit:
+            await call.answer(get_text(lang, 'cmp_limit_reached', limit=limit), show_alert=True)
+            return
+        name = f"{comp1} {q1} + {comp2} {q2}"
+        try:
+            save_compare_to_db(user_id, name, comp1, q1, comp2, q2)
+            await call.answer(get_text(lang, 'cmp_saved_ok'), show_alert=True)
+            await call.message.edit_text(
+                get_text(lang, 'cmp_saved_msg', name=name),
+                reply_markup=types.InlineKeyboardMarkup().add(
+                    types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="cmp_back_to_compare_menu")
+                )
+            )
+        except Exception:
+            await call.answer(get_text(lang, 'cmp_saved_fail'), show_alert=True)
+        return
+    if data.startswith("cmp_run_saved|"):
+        _, cid, day = data.split("|")
+        row = get_compare_by_id(int(cid))
+        if not row:
+            await call.answer(get_text(lang, 'cmp_no_saved'), show_alert=True)
+            return
+        comp1, q1, comp2, q2 = row['comp1'], row['queue1'], row['comp2'], row['queue2']
+        await run_compare_and_show(call, comp1, q1, comp2, q2, day, lang, saved_id=row['id'])
+        await call.answer()
+        return
+    if data.startswith("cmp_del|"):
+        _, cid = data.split("|")
+        delete_compare_by_id(int(cid))
+        await call.answer(get_text(lang, 'cmp_deleted_ok'), show_alert=True)
+        await compare_my_list(call)
+        return
+    if data.startswith("cmp_details|"):
+        parts = data.split("|")
+        if len(parts) != 6:
+            await call.answer("Invalid data", show_alert=True)
+            return
+        _, comp1, q1, comp2, q2, day = parts
+        await show_compare_details(call, comp1, q1, comp2, q2, day, lang)
+        await call.answer()
+        return
     await call.answer()
 
-async def my_queues(message: types.Message):
-    lang = get_user_lang(message.from_user.id)
-    with get_db() as conn:
-        rows = conn.execute("SELECT id, company, queue FROM users WHERE user_id=?", (message.from_user.id,)).fetchall()
-    if not rows:
-        return await message.answer(get_text(lang, 'empty_list'))
-    kb = types.InlineKeyboardMarkup()
-    for r in rows:
-        kb.add(types.InlineKeyboardButton(
-            text=f"🗑 {r['company']} {r['queue']}",
-            callback_data=f"del_{r['id']}",
-            style="danger"
-        ))
-    await message.answer(get_text(lang, 'my_que'), reply_markup=kb)
-
-async def delete_sub(call: types.CallbackQuery, scheduler):
-    # 1. Определяем язык пользователя
-    lang = get_user_lang(call.from_user.id)
-    
-    try:
-        # Извлекаем ID строки из callback_data (например, 'del_5' -> '5')
-        sub_id = call.data.split("_", 1)[1]
-    except Exception:
-        msg = get_text(lang, "invalid_data") if get_text else "Невірні дані"
-        await call.answer(msg, show_alert=True)
-        return
-
-    # 2. Удаляем подписку из БД
-    with get_db() as conn:
-        conn.execute("DELETE FROM users WHERE id=?", (sub_id,))
-        conn.commit()
-
-    # Всплывающее уведомление
-    await call.answer(get_text(lang, 'deleted'), show_alert=False)
-
-    # 3. Обновляем планировщик уведомлений
-    try:
-        from services.scheduler import rebuild_jobs
-        await rebuild_jobs(call.bot, scheduler)
-    except Exception as e:
-        print(f"Failed to rebuild scheduler: {e}")
-
-    # 4. ФОРМИРУЕМ ОБНОВЛЕННОЕ МЕНЮ
-    with get_db() as conn:
-        # Получаем актуальный список черг пользователя
-        rows = conn.execute(
-            "SELECT id, company, queue FROM users WHERE user_id=?", 
-            (call.from_user.id,)
-        ).fetchall()
-
-    if not rows:
-        # Если черг больше нет
-        new_text = get_text(lang, 'empty_list')
-        new_kb = None # Или можно добавить кнопку "Назад"
-    else:
-        # Если черги остались — создаем новую клавиатуру
-        new_text = get_text(lang, 'my_que')
-        new_kb = types.InlineKeyboardMarkup()
-        for r in rows:
-            # Создаем кнопки заново с актуальными ID
-            new_kb.add(types.InlineKeyboardButton(text=f"🗑 {r['company']} {r['queue']}", 
-                callback_data=f"del_{r['id']}"
-            ))
-
-    # 5. Редактируем текущее сообщение (Бесшовное обновление)
-    try:
-        await call.message.edit_text(
-            text=new_text, 
-            reply_markup=new_kb, 
-            parse_mode='HTML'
-        )
-    except Exception as e:
-        # Если текст не изменился, Telegram выдаст ошибку, просто игнорируем её
-        pass
-
-async def support_cmd(message: types.Message):
-    lang = get_user_lang(message.from_user.id)
-    await message.answer(get_text(lang, 'support_text', user=config.SUPPORT_USER, url=config.DONATE_URL), disable_web_page_preview=True)
 
 async def settings_cmd(message: types.Message):
     lang = get_user_lang(message.from_user.id)
@@ -1163,6 +1040,7 @@ async def settings_cmd(message: types.Message):
     kb.add(types.InlineKeyboardButton(text=get_text(lang, 'btn_notifications'), callback_data="open_notifications"))
     kb.add(types.InlineKeyboardButton(text=get_text(lang, 'btn_toggle_all'), callback_data="toggle_all"))
     await message.answer(get_text(lang, 'settings_text'), reply_markup=kb)
+
 
 async def open_language_menu(call: types.CallbackQuery):
     lang = get_user_lang(call.from_user.id)
@@ -1175,24 +1053,39 @@ async def open_language_menu(call: types.CallbackQuery):
             pass
     await call.answer()
 
+
 async def open_notifications(call: types.CallbackQuery):
     user_id = call.from_user.id
-    settings = get_user_settings(user_id)
-    lang = settings['language']
+    settings_data = get_user_settings(user_id)
+    lang = settings_data['language']
 
-    def state_emoji(v): return "✅" if int(v) == 1 else "❌"
+    def state_emoji(v):
+        return "✅" if int(v) == 1 else "❌"
 
     kb = types.InlineKeyboardMarkup(row_width=1)
-    kb.add(types.InlineKeyboardButton(text=f"{get_text(lang, 'notif_label_off')}: {state_emoji(settings['notify_off'])}", callback_data=cb_notify_new('notify_off', settings['notify_off'])))
-    kb.add(types.InlineKeyboardButton(text=f"{get_text(lang, 'notif_label_on')}: {state_emoji(settings['notify_on'])}", callback_data=cb_notify_new('notify_on', settings['notify_on'])))
-    kb.add(types.InlineKeyboardButton(text=f"{get_text(lang, 'notif_label_off_10')}: {state_emoji(settings['notify_off_10'])}", callback_data=cb_notify_new('notify_off_10', settings['notify_off_10'])))
-    kb.add(types.InlineKeyboardButton(text=f"{get_text(lang, 'notif_label_on_10')}: {state_emoji(settings['notify_on_10'])}", callback_data=cb_notify_new('notify_on_10', settings['notify_on_10'])))
+    kb.add(types.InlineKeyboardButton(
+        text=f"{get_text(lang, 'notif_label_off')}: {state_emoji(settings_data['notify_off'])}",
+        callback_data=cb_notify_new('notify_off', settings_data['notify_off'])
+    ))
+    kb.add(types.InlineKeyboardButton(
+        text=f"{get_text(lang, 'notif_label_on')}: {state_emoji(settings_data['notify_on'])}",
+        callback_data=cb_notify_new('notify_on', settings_data['notify_on'])
+    ))
+    kb.add(types.InlineKeyboardButton(
+        text=f"{get_text(lang, 'notif_label_off_10')}: {state_emoji(settings_data['notify_off_10'])}",
+        callback_data=cb_notify_new('notify_off_10', settings_data['notify_off_10'])
+    ))
+    kb.add(types.InlineKeyboardButton(
+        text=f"{get_text(lang, 'notif_label_on_10')}: {state_emoji(settings_data['notify_on_10'])}",
+        callback_data=cb_notify_new('notify_on_10', settings_data['notify_on_10'])
+    ))
     kb.add(types.InlineKeyboardButton(text=get_text(lang, 'back'), callback_data="open_settings_back"))
     try:
         await call.message.edit_text(get_text(lang, 'notifications_text'), reply_markup=kb)
     except Exception:
         await call.message.answer(get_text(lang, 'notifications_text'), reply_markup=kb)
     await call.answer()
+
 
 async def toggle_notify(call: types.CallbackQuery):
     user_id = call.from_user.id
@@ -1209,10 +1102,16 @@ async def toggle_notify(call: types.CallbackQuery):
     set_user_setting(user_id, key, new)
     await open_notifications(call)
 
+
 async def toggle_all_notify(call: types.CallbackQuery):
     user_id = call.from_user.id
-    settings = get_user_settings(user_id)
-    any_enabled = any([settings['notify_off'], settings['notify_on'], settings['notify_off_10'], settings['notify_on_10']])
+    settings_data = get_user_settings(user_id)
+    any_enabled = any([
+        settings_data['notify_off'],
+        settings_data['notify_on'],
+        settings_data['notify_off_10'],
+        settings_data['notify_on_10']
+    ])
     new = 0 if any_enabled else 1
     for k in ['notify_off', 'notify_on', 'notify_off_10', 'notify_on_10']:
         set_user_setting(user_id, k, new)
@@ -1223,6 +1122,7 @@ async def toggle_all_notify(call: types.CallbackQuery):
     except Exception:
         await call.answer("OK", show_alert=False)
     await open_notifications(call)
+
 
 async def back_to_settings_from_notifications(call: types.CallbackQuery):
     lang = get_user_lang(call.from_user.id)
@@ -1236,25 +1136,30 @@ async def back_to_settings_from_notifications(call: types.CallbackQuery):
         await call.message.answer(get_text(lang, 'settings_text'), reply_markup=kb)
     await call.answer()
 
+
+async def support_cmd(message: types.Message):
+    lang = get_user_lang(message.from_user.id)
+    await message.answer(
+        get_text(lang, 'support_text', user=settings.SUPPORT_USERNAME, url=settings.DONATE_URL),
+        disable_web_page_preview=True
+    )
+
+
 async def inline_echo(inline_query: types.InlineQuery):
     query_text = inline_query.query.strip().lower()
     if not query_text:
         return
-
     parts = query_text.split()
     if len(parts) < 2:
         return
-
     company = parts[0].upper().replace('DTEK', 'ДТЕК')
     queue = parts[1]
 
     now_ua = datetime.now(UA_TZ)
     today_dt = now_ua
     tomorrow_dt = now_ua + timedelta(days=1)
-
     today_db = today_dt.strftime('%Y-%m-%d')
     tomorrow_db = tomorrow_dt.strftime('%Y-%m-%d')
-
     target_date_db = today_db
     display_date = today_dt.strftime('%d.%m.%Y')
     day_label = "на сьогодні"
@@ -1281,61 +1186,29 @@ async def inline_echo(inline_query: types.InlineQuery):
     else:
         total_off_minutes = 0
         lines = []
-
         for r in rows:
             off_time = r['off_time']
             on_time = r['on_time']
-
             off_dt = datetime.strptime(off_time, "%H:%M")
             on_dt = datetime.strptime(on_time, "%H:%M")
-
-            # переход через 00:00
             if on_dt <= off_dt:
                 on_dt += timedelta(days=1)
-
-            # 23:59 считаем как 24:00
             if on_time == "23:59":
                 on_dt += timedelta(minutes=1)
-
             diff = on_dt - off_dt
             minutes = int(diff.total_seconds() // 60)
             total_off_minutes += minutes
-
-            # округление до 0.5 часа
-            hours_float = minutes / 60
-            hours_float = round(hours_float * 2) / 2
-
-            if hours_float.is_integer():
-                hours_str = str(int(hours_float))
-            else:
-                hours_str = str(hours_float)
-
-            lines.append(
-                f"""🔌 {off_time} - {on_time} <i>({hours_str} год.)</i>"""
-            )
-
-        # итог по суткам
-        total_hours_float = total_off_minutes / 60
-        total_hours_float = round(total_hours_float * 2) / 2
-
-        if total_hours_float.is_integer():
-            total_off_str = str(int(total_hours_float))
-        else:
-            total_off_str = str(total_hours_float)
-
+            hours_float = round((minutes / 60) * 2) / 2
+            hours_str = str(int(hours_float)) if hours_float.is_integer() else str(hours_float)
+            lines.append(f"""🔌 {off_time} - {on_time} <i>({hours_str} год.)</i>""")
+        total_hours_float = round((total_off_minutes / 60) * 2) / 2
+        total_off_str = str(int(total_hours_float)) if total_hours_float.is_integer() else str(total_hours_float)
         total_on_float = 24 - total_hours_float
-
-        if total_on_float.is_integer():
-            total_on_str = str(int(total_on_float))
-        else:
-            total_on_str = str(total_on_float)
-
+        total_on_str = str(int(total_on_float)) if total_on_float.is_integer() else str(total_on_float)
         schedule_text = (
-            "\n"
-            + "\n".join(lines)
-            + "\n\n"
-            + f"✅ <b>Зі світлом:</b> {total_on_str} год.\n"
-            + f"❌ <b>Без світла:</b> {total_off_str} год."
+            "\n" + "\n".join(lines) + "\n\n" +
+            f"✅ <b>Зі світлом:</b> {total_on_str} год.\n" +
+            f"❌ <b>Без світла:</b> {total_off_str} год."
         )
 
     result_text = (
@@ -1343,7 +1216,6 @@ async def inline_echo(inline_query: types.InlineQuery):
         f"{schedule_text}\n\n"
         f"💡 <a href='https://t.me/lightmeuaBot'><b>Монітор світла</b></a>"
     )
-
     item = types.InlineQueryResultArticle(
         id=str(uuid.uuid4()),
         title=f"Графік {company} {queue} ({day_label})",
@@ -1354,18 +1226,15 @@ async def inline_echo(inline_query: types.InlineQuery):
             disable_web_page_preview=True
         )
     )
-
     await inline_query.answer(results=[item], cache_time=60)
 
-# --- Реєстрація ---
+
 def register_handlers(dp, scheduler):
-
-    router.message.register(compare_menu, lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare'))
-
-    router.callback_query.register(
-        compare_callback_router,
-        lambda c: c.data and c.data.startswith('cmp_')
+    router.message.register(
+        compare_menu,
+        lambda m: bool(m.text) and m.text == get_text(get_user_lang(m.from_user.id), 'btn_compare')
     )
+    router.callback_query.register(compare_callback_router, lambda c: c.data and c.data.startswith('cmp_'))
 
     back_labels = (get_text('uk', 'back'), get_text('ru', 'back'))
     router.message.register(
@@ -1377,21 +1246,33 @@ def register_handlers(dp, scheduler):
     router.message.register(start_cmd, Command('start'))
     router.callback_query.register(set_language, lambda c: c.data and c.data.startswith('lang:'))
     router.callback_query.register(show_main_menu, lambda c: c.data == 'menu_start')
-
-    router.message.register(view_schedules_start, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["графік", "график"]))
-    router.message.register(add_queue_btn, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["додати", "добавить"]))
-    router.message.register(my_queues, lambda m: bool(m.text) and any(x in m.text.lower() for x in ["мої чер", "мои оче"]))
+    router.message.register(
+        view_schedules_start,
+        lambda m: bool(m.text) and any(x in m.text.lower() for x in ["графік", "график"])
+    )
+    router.message.register(
+        add_queue_btn,
+        lambda m: bool(m.text) and any(x in m.text.lower() for x in ["додати", "добавить"])
+    )
+    router.message.register(
+        my_queues,
+        lambda m: bool(m.text) and any(x in m.text.lower() for x in ["мої чер", "мои оче"])
+    )
 
     support_labels = (get_text('uk', 'btn_support'), get_text('ru', 'btn_support'))
     settings_labels = (get_text('uk', 'btn_settings'), get_text('ru', 'btn_settings'))
     router.message.register(support_cmd, lambda m: bool(m.text) and m.text in support_labels)
     router.message.register(settings_cmd, lambda m: bool(m.text) and m.text in settings_labels)
 
-    router.callback_query.register(handle_comp_selection, lambda c: c.data and c.data.startswith(('vcomp_', 'scomp_')))
+    router.callback_query.register(
+        handle_comp_selection,
+        lambda c: c.data and c.data.startswith(('vcomp_', 'scomp_'))
+    )
     router.callback_query.register(show_sched, lambda c: c.data and c.data.startswith('sched:'))
 
     async def _save_sub_wrapper(call: types.CallbackQuery):
         await save_sub(call, scheduler)
+
     router.callback_query.register(_save_sub_wrapper, lambda c: c.data and c.data.startswith('menu:save:'))
 
     router.callback_query.register(open_language_menu, lambda c: c.data == 'open_lang')
@@ -1403,6 +1284,7 @@ def register_handlers(dp, scheduler):
 
     async def _delete_sub_wrapper(call: types.CallbackQuery):
         await delete_sub(call, scheduler)
+
     router.callback_query.register(_delete_sub_wrapper, lambda c: c.data and c.data.startswith('del_'))
 
     router.message.register(view_schedules_start, Command('sched'))
@@ -1412,6 +1294,7 @@ def register_handlers(dp, scheduler):
     router.message.register(support_cmd, Command('support'))
     router.message.register(settings_cmd, Command('settings'))
     router.message.register(compare_menu, Command('compare'))
+
     router.inline_query.register(inline_echo)
     router.callback_query.register(compare_menu, lambda c: c.data == 'compare')
 

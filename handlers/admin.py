@@ -1,22 +1,21 @@
-from aiogram import Router, types, Bot
-from aiogram.filters import Command
-from aiogram.types import FSInputFile
-from config import ADMIN_ID
-from services.parser import parse_schedule_text
-from database.db import get_db
-from services.scheduler import rebuild_jobs
-from locales.strings import get_text
 import asyncio
-import config
-from database.db import get_stats
 import os
 import tempfile
 import sqlite3
 import shutil
 from datetime import datetime, timedelta
 import pytz
+from aiogram import Router, types, Bot
+from aiogram.filters import Command
+from aiogram.types import FSInputFile
+from config import settings
+from services.parser import parse_schedule_text
+from database.db import get_db, get_stats
+from services.scheduler import rebuild_jobs
+from locales.strings import get_text
 
 UA_TZ = pytz.timezone('Europe/Kyiv')
+
 router = Router(name="admin")
 
 def format_display_date(date_str: str):
@@ -24,21 +23,22 @@ def format_display_date(date_str: str):
         return datetime.strptime(date_str, '%Y-%m-%d').strftime('%d.%m.%Y')
     except Exception:
         return date_str
-    
+
 now = datetime.now(UA_TZ)
 
 async def cmd_avaron(message: types.Message):
-    if message.from_user.id != config.ADMIN_ID: 
+    if message.from_user.id != settings.ADMIN_ID: 
         return
+
     with get_db() as conn:
-        # Перевіряємо чи є такий ключ, щоб не було помилок
         check = conn.execute("SELECT key FROM bot_settings WHERE key='avaron'").fetchone()
         if check:
             conn.execute("UPDATE bot_settings SET value='1' WHERE key='avaron'")
         else:
             conn.execute("INSERT INTO bot_settings (key, value) VALUES ('avaron', '1')")
         conn.commit()
-    await message.answer("❗️ Режим Аварійних відключень: УВІМКНЕНО")
+
+    await message.answer("Режим Аварійних відключень: УВІМКНЕНО")
 
 def kb_admin_cmds():
     now = datetime.now(UA_TZ)
@@ -62,16 +62,19 @@ def kb_admin_cmds():
         types.KeyboardButton(text="/getdb"), 
         types.KeyboardButton(text="/stats")
     )
+
     return kb
 
 async def admin_menu(message: types.Message):
-    if message.from_user.id != config.ADMIN_ID: 
+    if message.from_user.id != settings.ADMIN_ID: 
         return
+
     await message.answer("Админ меню:", reply_markup=kb_admin_cmds())
 
 async def cmd_avaroff(message: types.Message):
-    if message.from_user.id != config.ADMIN_ID: 
+    if message.from_user.id != settings.ADMIN_ID: 
         return
+
     with get_db() as conn:
         check = conn.execute("SELECT key FROM bot_settings WHERE key='avaron'").fetchone()
         if check:
@@ -79,13 +82,13 @@ async def cmd_avaroff(message: types.Message):
         else:
             conn.execute("INSERT INTO bot_settings (key, value) VALUES ('avaron', '0')")
         conn.commit()
-    await message.answer("✅ Режим Аварійних відключень: ВИМКНЕНО")
+
+    await message.answer("Режим Аварійних відключень: ВИМКНЕНО")
 
 async def admin_help(message: types.Message):
-    # Перевірка, чи це адмін (додай свій ID у config.py)
-    if message.from_user.id != config.ADMIN_ID:
+    if message.from_user.id != settings.ADMIN_ID:
         return
-    
+
     text = (
         "<b>ADMIN CMD:</b>\n\n"
         f"/ahelp - Это меню\n"
@@ -98,48 +101,41 @@ async def admin_help(message: types.Message):
         f"/avaron - Аварийные отключения ВКЛ\n"
         f"/avaroff - Аварийные отключения ВЫКЛ\n"
     )
+
     await message.answer(text)
-        
+
 async def download_db(message: types.Message):
-    if message.from_user.id != config.ADMIN_ID:
+    if message.from_user.id != settings.ADMIN_ID:
         return
 
-    db_path = "/app/data/database.db" # Переконайся, що шлях веде до Volume
-
+    db_path = "/app/data/database.db"
     if os.path.exists(db_path):
         db_file = FSInputFile(db_path, filename='database.db')
         await message.answer_document(db_file, caption="📂 База даних з Volume (/app/data)")
     else:
         try:
             content = os.listdir('/app/data')
-            await message.answer(f"❌ database.db не знайдено.\nВміст папки data: <code>{', '.join(content) if content else 'ПУСТО'}</code>", parse_mode='HTML')
+            await message.answer(f"database.db не знайдено.\nВміст папки data: <code>{', '.join(content) if content else 'ПУСТО'}</code>", parse_mode='HTML')
         except Exception as e:
-            await message.answer(f"❌ Помилка доступу до /app/data: {e}")
-            
+            await message.answer(f"Помилка доступу до /app/data: {e}")
+
 async def upload_db_via_bot(message: types.Message, bot: Bot):
-    if message.from_user.id != config.ADMIN_ID:
-        return await message.answer("🚫 Доступ заборонено.")
+    if message.from_user.id != settings.ADMIN_ID:
+        return await message.answer("Доступ заборонено.")
 
     doc = message.document
-    
-    # ... (твои проверки имени и размера остаются без изменений) ...
-
-    # Скачиваем во временный файл
     temp_path = None
+
     try:
         with tempfile.NamedTemporaryFile(delete=False, prefix="db_upload_", suffix=".db") as tf:
             temp_path = tf.name
-            
-        # 2. ИСПРАВЛЕННАЯ СТРОКА: используем bot.download
         await bot.download(file=doc, destination=temp_path)
-        
     except Exception as e:
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
-        await message.answer(f"❌ Не вдалося завантажити файл: {e}")
+        await message.answer(f"Не вдалося завантажити файл: {e}")
         return
 
-    # Простейшая валидация
     try:
         con = sqlite3.connect(f"file:{temp_path}?mode=ro", uri=True, timeout=5)
         cur = con.cursor()
@@ -149,192 +145,144 @@ async def upload_db_via_bot(message: types.Message, bot: Bot):
     except Exception as e:
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        await message.answer(f"❌ Файл не валідна SQLite база: {e}")
+        await message.answer(f"Файл не валідна SQLite база: {e}")
         return
 
-    # Путь к рабочей базе (volume /app/data)
     dst = "/app/data/database.db"
     backup_path = dst + ".bak"
 
     try:
-        # Создаём резервную копию текущей БД (если существует)
         if os.path.exists(dst):
             try:
-                # ВАЖНО: Тут тоже используем shutil.move вместо os.replace
                 if os.path.exists(backup_path):
                     os.remove(backup_path)
                 shutil.move(dst, backup_path)
             except Exception as e:
-                print("Warning: cannot create backup of existing DB:", e)
-
-        # Атомично заменяем (ИСПОЛЬЗУЕМ shutil.move!)
+                pass
         shutil.move(temp_path, dst)
-        
-        # Даем права на файл (на всякий случай для Docker)
         os.chmod(dst, 0o600)
-        
     except Exception as e:
-        # попытка отката из backup
         try:
             if os.path.exists(backup_path) and not os.path.exists(dst):
                 shutil.move(backup_path, dst)
         except Exception:
             pass
-        await message.answer(f"❌ Помилка при заміні бази: {e}")
+        await message.answer(f"Помилка при заміні бази: {e}")
         return
     finally:
-        # Чистим временный файл если он остался
         if temp_path and os.path.exists(temp_path):
             try: os.remove(temp_path)
             except: pass
 
-    # Уведомляем админа
-    await message.answer("✅ Базу успішно замінено. Потрібно перезапустити бота, щоб нова база почала використовуватись.")
-        
+    await message.answer("Базу успішно замінено. Потрібно перезапустити бота, щоб нова база почала використовуватись.")
+
 async def admin_stats(message: types.Message):
-    # Перевірка, чи це адмін (додай свій ID у config.py)
-    if message.from_user.id != config.ADMIN_ID:
+    if message.from_user.id != settings.ADMIN_ID:
         return
 
     users_count, subs_count = get_stats()
-    
     text = (
         "📊 <b>Статистика бота:</b>\n\n"
         f"👤 Унікальних користувачів: <code>{users_count}</code>\n"
         f"🔔 Активних підписок на черги: <code>{subs_count}</code>"
     )
+
     await message.answer(text)
-    
-# Хендлер для команди /news
+
 async def broadcast_news(message: types.Message):
-    # 1. Перевірка на адміна
-    if message.from_user.id != config.ADMIN_ID:
+    if message.from_user.id != settings.ADMIN_ID:
         return
 
-    # 2. Визначаємо, що ми відправляємо (Копію чи Текст)
     is_copy_mode = False
     text_to_send = ""
     from_chat_id = None
     message_id_to_copy = None
 
     if message.reply_to_message:
-        # ВАРІАНТ А: Ви відповіли на повідомлення (Для Преміум емодзі!)
         is_copy_mode = True
         from_chat_id = message.chat.id
         message_id_to_copy = message.reply_to_message.message_id
     else:
-        # ВАРІАНТ Б: Ви просто написали текст після команди
         text_to_send = (message.text.split(maxsplit=1)[1] if message.text and len(message.text.split(maxsplit=1)) > 1 else "")
         if not text_to_send:
             await message.answer(
-                "ℹ️ <b>Як зробити розсилку:</b>\n\n"
-                "1️⃣ <b>З Преміум емодзі/фото:</b> Напишіть пост у цей чат, натисніть на нього 'Відповісти' (Reply) і напишіть <code>/news</code>.\n"
-                "2️⃣ <b>Тільки текст:</b> Напишіть <code>/news Ваш текст</code>",
+                "ℹ<b>Як зробити розсилку:</b>\n\n"
+                "1<b>З Преміум емодзі/фото:</b> Напишіть пост у цей чат, натисніть на нього 'Відповісти' (Reply) і напишіть <code>/news</code>.\n"
+                "2<b>Тільки текст:</b> Напишіть <code>/news Ваш текст</code>",
                 parse_mode="HTML"
             )
             return
 
-    # 3. Отримуємо всіх користувачів
     with get_db() as conn:
         users = conn.execute("SELECT DISTINCT user_id FROM user_prefs").fetchall()
 
     if not users:
-        await message.answer("🤷‍♂️ Немає користувачів для розсилки.")
+        await message.answer("Немає користувачів для розсилки.")
         return
 
     count = 0
     error_count = 0
-    
     status_msg = await message.answer(f"⏳ Починаю розсилку на {len(users)} користувачів...")
 
-    # 4. Запускаємо цикл розсилки
     for user in users:
         user_id = user['user_id']
         try:
             if is_copy_mode:
-                # ВИПРАВЛЕННЯ ТУТ: використовуємо message.bot замість просто bot
-                await message.bot.copy_message(
-                    chat_id=user_id, 
-                    from_chat_id=from_chat_id, 
-                    message_id=message_id_to_copy
-                )
+                await message.bot.copy_message(chat_id=user_id, from_chat_id=from_chat_id, message_id=message_id_to_copy)
             else:
-                # ВИПРАВЛЕННЯ ТУТ: використовуємо message.bot замість просто bot
                 await message.bot.send_message(user_id, text_to_send, parse_mode="HTML")
-            
             count += 1
-            await asyncio.sleep(0.05) # Анти-спам затримка
-
+            await asyncio.sleep(0.05)
         except Exception as e:
-            print(f"Помилка розсилки для {user_id}: {e}")
             error_count += 1
 
-    # 5. Звіт
     await status_msg.edit_text(
-        f"✅ <b>Розсилка завершена!</b>\n\n"
-        f"📧 Отримали: <code>{count}</code>\n"
-        f"🚫 Не вдалося (заблокували бота): <code>{error_count}</code>",
+        f"<b>Розсилка завершена!</b>\n\n"
+        f"Отримали: <code>{count}</code>\n"
+        f"Не вдалося (заблокували бота): <code>{error_count}</code>",
         parse_mode="HTML"
     )
 
-# Не забудь додати реєстрацію в функцію register_handlers:
-# dp.register_message_handler(broadcast_news, commands=['news'])
-# --- Notify Users Function ---
 async def notify_users_about_update(bot, company, date_str, results):
     updated_queues = sorted({r['queue'] for r in results})
     queues_map = {}
+
     for r in results:
         queues_map.setdefault(r['queue'], []).append(r)
 
     with get_db() as conn:
         for queue in updated_queues:
             items = queues_map.get(queue, [])
-            
-            # Перевіряємо, чи є маркер порожнечі ('-' з парсера або 'empty' з бази)
             is_no_outages = any(it.get('off_time') in ['-', 'empty'] for it in items)
-
             total_off_minutes = 0
-            schedule_data = [] # Зберігаємо дані як словники, щоб локалізувати потім
+            schedule_data = []
 
             if not is_no_outages:
                 try:
                     items_sorted = sorted(items, key=lambda x: x.get('off_time', ''))
                 except Exception:
                     items_sorted = items
-
                 for it in items_sorted:
                     off = it.get('off_time', '').strip()
                     on = it.get('on_time', '').strip()
-                    
                     if off and on and off not in ['-', 'empty']:
-                        # Рахуємо тривалість відключення
                         try:
                             from datetime import datetime
                             t1 = datetime.strptime(off, '%H:%M')
                             t2 = datetime.strptime(on, '%H:%M')
-                            
                             if on == '00:00' or t2 <= t1:
                                 diff_minutes = 1440 - (t1.hour * 60 + t1.minute)
                             else:
                                 diff_minutes = (t2 - t1).seconds // 60
-                            
                             total_off_minutes += diff_minutes
-                            
                             hours_val = round(diff_minutes / 60, 1)
                             display_hours = int(hours_val) if hours_val.is_integer() else hours_val
                         except Exception:
                             display_hours = 0
-                            
-                        schedule_data.append({
-                            'off': off,
-                            'on': on,
-                            'hours': display_hours
-                        })
+                        schedule_data.append({'off': off, 'on': on, 'hours': display_hours})
 
-            # Підсумки за добу
             off_h = round(total_off_minutes / 60, 1)
             on_h = round(24 - off_h, 1)
-            
             fmt_off = int(off_h) if off_h.is_integer() else off_h
             fmt_on = int(on_h) if on_h.is_integer() else on_h
 
@@ -347,13 +295,8 @@ async def notify_users_about_update(bot, company, date_str, results):
 
             for user in users:
                 lang = user['language'] or 'uk'
-                
-                # Заголовок
                 header = get_text(lang, 'update_notify', company=company, queue=queue, date=format_display_date(date_str))
-                
-                # Футер з посиланням
-                link_text = get_text(lang, 'monitor_link') if hasattr(get_text, 'monitor_link') else 'Монітор світла'
-                # На випадок якщо в словнику ще немає ключів, використовуємо fallback значення через try-except або get
+
                 try:
                     h_unit = get_text(lang, 'hour_short_dot')
                     outages_title = get_text(lang, 'notify_outages_title')
@@ -370,18 +313,15 @@ async def notify_users_about_update(bot, company, date_str, results):
                     footer_link = "Монітор світла"
 
                 footer = f"{footer_link}"
-                
+
                 if is_no_outages:
                     status_msg = get_text(lang, 'no_outages') 
                     text = f"{header}\n\n<b>{status_msg}</b>\n\n{footer}"
                 elif schedule_data:
-                    # Збираємо рядки графіку для конкретної мови користувача
                     lines_text = []
                     for sl in schedule_data:
                         lines_text.append(f'<tg-emoji emoji-id="6019346268197759615">🔌</tg-emoji> {sl["off"]} - {sl["on"]} ({sl["hours"]} {h_unit})')
-                    
                     schedule_block = "\n".join(lines_text)
-                    
                     text = (
                         f"{header}\n\n"
                         f"{outages_title}\n{schedule_block}\n\n"
@@ -392,136 +332,98 @@ async def notify_users_about_update(bot, company, date_str, results):
                     )
                 else:
                     text = header + footer
-                    
                 try:
-                    await bot.send_message(
-                        user['user_id'], 
-                        text, 
-                        parse_mode="HTML", 
-                        disable_web_page_preview=True
-                    )
+                    await bot.send_message(user['user_id'], text, parse_mode="HTML", disable_web_page_preview=True)
                 except Exception:
                     pass
 
-# --- Handlers ---
 async def cmd_tech_on(message: types.Message):
-    if message.from_user.id != ADMIN_ID: return
+    if message.from_user.id != settings.ADMIN_ID: return
+
     with get_db() as conn:
         conn.execute("UPDATE bot_settings SET value='1' WHERE key='tech_mode'")
         conn.commit()
-    await message.answer("🚧 TECH MODE: ON")
+
+    await message.answer("TECH MODE: ON")
 
 async def cmd_tech_off(message: types.Message):
-    if message.from_user.id != ADMIN_ID: return
+    if message.from_user.id != settings.ADMIN_ID: return
+
     with get_db() as conn:
         conn.execute("UPDATE bot_settings SET value='0' WHERE key='tech_mode'")
         conn.commit()
-    await message.answer("✅ TECH MODE: OFF")
+
+    await message.answer("TECH MODE: OFF")
 
 async def upload_schedule(message: types.Message, scheduler):
-    if message.from_user.id != ADMIN_ID: return
+    if message.from_user.id != settings.ADMIN_ID: return
+
     raw_text = message.text.replace('/upload', '').strip()
-    
-    # --- 🔥 NEW: массовый empty через "-" ---
     lines = raw_text.splitlines()
+
     if len(lines) >= 2 and lines[1].strip() == "-":
         try:
-            header = lines[0].strip()  # например "ДТЕК/ЦЕК 19.03.2026"
+            header = lines[0].strip()
             parts = header.split()
             companies_raw = parts[0].upper()
             date_input = parts[1]
-
-            # Преобразуем дату
             parsed_date = datetime.strptime(date_input, '%d.%m.%Y')
             date_str = parsed_date.strftime('%Y-%m-%d')
-
-            companies = companies_raw.split("/")  # ["ДТЕК", "ЦЕК"]
+            companies = companies_raw.split("/")
 
             with get_db() as conn:
-                # Для каждой компании
                 for company in companies:
                     if company not in ["ДТЕК", "ЦЕК"]:
                         continue
-
-                    # 1️⃣ Запоминаем старые данные, чтобы знать, кому отправлять уведомления
                     old_queues = {}
-                    old_rows = conn.execute(
-                        "SELECT queue, off_time, on_time FROM schedules WHERE company = ? AND date = ?",
-                        (company, date_str)
-                    ).fetchall()
+                    old_rows = conn.execute("SELECT queue, off_time, on_time FROM schedules WHERE company = ? AND date = ?", (company, date_str)).fetchall()
+
                     for row in old_rows:
                         q = row['queue']
                         if q not in old_queues:
                             old_queues[q] = []
                         old_queues[q].append((row['off_time'], row['on_time']))
-
-                    # 2️⃣ Удаляем старые записи
                     conn.execute("DELETE FROM schedules WHERE company = ? AND date = ?", (company, date_str))
 
-                    # 3️⃣ Вставляем empty для всех очередей (1.1 … 6.2)
                     for i in range(1, 7):
                         for j in range(1, 3):
                             queue = f"{i}.{j}"
-                            conn.execute(
-                                "INSERT INTO schedules (company, queue, date, off_time, on_time) VALUES (?,?,?,?,?)",
-                                (company, queue, date_str, 'empty', 'empty')
-                            )
-
+                            conn.execute("INSERT INTO schedules (company, queue, date, off_time, on_time) VALUES (?,?,?,?,?)", (company, queue, date_str, 'empty', 'empty'))
                     conn.commit()
-
-                    # 4️⃣ Формируем новые данные для уведомлений
                     new_data = []
+
                     for i in range(1, 7):
                         for j in range(1, 3):
                             queue = f"{i}.{j}"
-                            new_data.append({
-                                'company': company,
-                                'queue': queue,
-                                'date': date_str,
-                                'off_time': 'empty',
-                                'on_time': 'empty'
-                            })
-
-                    # 5️⃣ Определяем, какие очереди изменились (все, у которых старые данные не совпадают с 'empty')
+                            new_data.append({'company': company, 'queue': queue, 'date': date_str, 'off_time': 'empty', 'on_time': 'empty'})
                     changed_queues = set()
+
                     for q in [f"{i}.{j}" for i in range(1,7) for j in range(1,3)]:
                         old_intervals = old_queues.get(q, [])
-                        # если в старых данных не было пустых интервалов или они отличаются
                         if not old_intervals or any(off != 'empty' or on != 'empty' for off, on in old_intervals):
                             changed_queues.add(q)
 
-                    # 6️⃣ Если есть изменённые очереди, отправляем уведомления
                     if changed_queues:
-                        # Фильтруем new_data только для изменённых очередей
                         changed_data = [item for item in new_data if item['queue'] in changed_queues]
                         await notify_users_about_update(message.bot, company, date_str, changed_data)
 
-            # Перезапускаем планировщик (как и раньше)
             await rebuild_jobs(message.bot, scheduler)
-
-            # Отвечаем админу
             await message.answer(
-                f"✅ Всі графіки для <b>{', '.join(companies)}</b> на <b>{format_display_date(date_str)}</b> встановлено як empty.\n"
+                f"Всі графіки для <b>{', '.join(companies)}</b> на <b>{format_display_date(date_str)}</b> встановлено як empty.\n"
                 f"Розіслано сповіщень для {len(changed_queues)} черг.",
                 parse_mode="HTML"
             )
-
             return
-
         except Exception as e:
-            return await message.answer(f"❌ Помилка при масовому empty: {e}")
-
+            return await message.answer(f"Помилка при масовому empty: {e}")
     company, date_str, data = parse_schedule_text(raw_text)
-    
+
     if not company or not date_str:
-        return await message.answer("❌ Формат: ДТЕК 29.01.2026 ...")
-    
+        return await message.answer("Формат: ДТЕК 29.01.2026 ...")
     old_queues = {}
+
     with get_db() as conn:
-        old_rows = conn.execute(
-            "SELECT queue, off_time, on_time FROM schedules WHERE company = ? AND date = ?",
-            (company, date_str)
-        ).fetchall()
+        old_rows = conn.execute("SELECT queue, off_time, on_time FROM schedules WHERE company = ? AND date = ?", (company, date_str)).fetchall()
         for row in old_rows:
             q = row['queue']
             if q not in old_queues:
@@ -530,60 +432,52 @@ async def upload_schedule(message: types.Message, scheduler):
 
     for q in old_queues:
         old_queues[q] = sorted(old_queues[q])
-
     new_queues = {}
+
     for item in data:
         q = item['queue']
         if q not in new_queues:
             new_queues[q] = []
-        # Замінюємо мінус на empty для порівняння
         off_cmp = 'empty' if item['off_time'] == '-' else item['off_time']
         on_cmp = 'empty' if item['on_time'] == '-' else item['on_time']
         new_queues[q].append((off_cmp, on_cmp))
-        
+
     for q in new_queues:
         new_queues[q] = sorted(new_queues[q])
-
     changed_queues = set()
+
     for q, new_intervals in new_queues.items():
         old_intervals = old_queues.get(q, [])
         if new_intervals != old_intervals:
             changed_queues.add(q)
-            
+
     if not changed_queues and old_queues:
-        return await message.answer(f"✅ Графік {company} на {format_display_date(date_str)} <b>не змінився</b>. Розсилку скасовано.", parse_mode="HTML")
+        return await message.answer(f"Графік {company} на {format_display_date(date_str)} <b>не змінився</b>. Розсилку скасовано.", parse_mode="HTML")
 
     with get_db() as conn:
         conn.execute("DELETE FROM schedules WHERE company = ? AND date = ?", (company, date_str))
         for item in data:
-            # ЗДЕСЬ МАГІЯ: Якщо прочерк, пишемо 'empty'
             off_val = 'empty' if item['off_time'] == '-' else item['off_time']
             on_val = 'empty' if item['on_time'] == '-' else item['on_time']
-            
-            conn.execute(
-                "INSERT INTO schedules (company, queue, date, off_time, on_time) VALUES (?,?,?,?,?)",
-                (item['company'], item['queue'], item['date'], off_val, on_val)
-            )
+            conn.execute("INSERT INTO schedules (company, queue, date, off_time, on_time) VALUES (?,?,?,?,?)", (item['company'], item['queue'], item['date'], off_val, on_val))
         conn.commit()
 
     await rebuild_jobs(message.bot, scheduler)
-    
     changed_data = [item for item in data if item['queue'] in changed_queues]
-    
+
     if changed_data:
         await notify_users_about_update(message.bot, company, date_str, changed_data)
-
     queues_map = {}
+
     for r in data:
         queues_map.setdefault(r['queue'], []).append(r)
-
     full_text_blocks = []
+
     for q, items in queues_map.items():
         is_no_outages = any(it.get('off_time') in ['-', 'empty'] for it in items)
         status_icon = "🔔" if q in changed_queues else "🔕 (без змін)"
-        
         if is_no_outages:
-            full_text_blocks.append(f"{company} {q} {status_icon}:\n✅ Відключень немає")
+            full_text_blocks.append(f"{company} {q} {status_icon}:\nВідключень немає")
         else:
             try:
                 items_sorted = sorted(items, key=lambda x: x.get('off_time', ''))
@@ -592,12 +486,11 @@ async def upload_schedule(message: types.Message, scheduler):
             lines = [f"""<tg-emoji emoji-id="5330017696660599813">🔴</tg-emoji> {it.get('off_time','').strip()} - <tg-emoji emoji-id="5330396907913098490">🟢</tg-emoji> {it.get('on_time','').strip()}""" for it in items_sorted if it.get('off_time') and it.get('on_time') and it.get('off_time') not in ['-', 'empty']]
             block = f"{company} {q} {status_icon}:\n" + "\n".join(lines) if lines else f"{company} {q} {status_icon}: (порожній графік)"
             full_text_blocks.append(block)
-
     full_schedules_text = "\n\n".join(full_text_blocks)
-    await message.answer(f"✅ {company} ({format_display_date(date_str)}) завантажено!\nРозіслано сповіщень для {len(changed_queues)} черг.\n\n{full_schedules_text}")
+
+    await message.answer(f"{company} ({format_display_date(date_str)}) завантажено!\nРозіслано сповіщень для {len(changed_queues)} черг.\n\n{full_schedules_text}")
 
 def register_handlers(dp, scheduler):
-
     async def _upload_schedule_wrapper(message: types.Message):
         await upload_schedule(message, scheduler)
 
@@ -612,4 +505,5 @@ def register_handlers(dp, scheduler):
     router.message.register(cmd_avaron, Command('avaron'))
     router.message.register(cmd_avaroff, Command('avaroff'))
     router.message.register(admin_menu, Command('amenu'))
+
     dp.include_router(router)

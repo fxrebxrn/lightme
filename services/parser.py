@@ -5,7 +5,6 @@ NO_OUTAGES_TOKENS = {
     '-', 'немає', 'нет', '0', 'нема', 'відключеньнемає', 'безвідключень', 'безотключений'
 }
 
-
 def parse_schedule_text(text: str):
     lines = (text or '').splitlines()
     if not lines:
@@ -18,7 +17,6 @@ def parse_schedule_text(text: str):
 
     company = "ЦЕК" if "ЦЕК" in match.group(1) else "ДТЕК"
     date_str = match.group(2)
-
     try:
         db_date = datetime.strptime(date_str, '%d.%m.%Y').strftime('%Y-%m-%d')
     except ValueError:
@@ -26,17 +24,14 @@ def parse_schedule_text(text: str):
 
     current_queue = ""
     results = []
-
     for line in lines[1:]:
         line = line.strip()
         if not line:
             continue
-
         queue_match = re.search(r'(?:Черга|Група)\s*(\d+(?:\.\d+)?)', line, re.IGNORECASE)
         if queue_match:
             current_queue = queue_match.group(1)
             continue
-
         clean_line = line.lower().replace(" ", "")
         if clean_line in NO_OUTAGES_TOKENS and current_queue:
             results.append(
@@ -50,7 +45,6 @@ def parse_schedule_text(text: str):
             )
             continue
 
-        # Поддержка нескольких интервалов в одной строке
         time_match = re.findall(r'(\d{1,2}:\d{2})\s*[-—–]\s*(\d{1,2}:\d{2})', line)
         if time_match and current_queue:
             for start, end in time_match:

@@ -1,10 +1,16 @@
-import os
+from pydantic_settings import BaseSettings
 
-API_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = 6751672551
-CHANNEL_ID = '@lightmetech'
-CHANNEL_URL = 'https://t.me/lightmetech'
-SUPPORT_USER = '@imnotafire'
-DONATE_URL = 'https://send.monobank.ua/jar/2LX7RwKWn9'
+class Settings(BaseSettings):
+    API_TOKEN: str
+    ADMIN_ID: int
+    CHANNEL_USERNAME: str
+    CHANNEL_URL: str
+    SUPPORT_USERNAME: str
+    DONATE_URL: str
+    DATABASE_NAME: str
 
-DB_NAME = 'bot_database.db'
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+
+settings = Settings()
