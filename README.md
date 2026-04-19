@@ -85,13 +85,14 @@ pip install -r requirements.txt
 
 Обязательная переменная:
 
-- `BOT_TOKEN` — токен Telegram-бота от @BotFather.
+- `API_TOKEN` — токен Telegram-бота от @BotFather.
 - `ADMIN_ID` — ID пользователя Telegram который администрирует бота.
 - `CHANNEL_USERNAME` — username Telegram-канала бота.
 - `CHANNEL_URL` — URL Telegram-канала бота.
 - `SUPPORT_USERNAME` — username пользователя Telegram который отвечает за тех. поддержку бота.
 - `DONATE_URL` — URL на поддержку бота (донат).
 - `DATABASE_NAME` — имя базы данных с расширением (по умолчанию .db).
+- `DATABASE_PATH` — путь к базе данных.
 
 Пример (Linux/macOS):
 

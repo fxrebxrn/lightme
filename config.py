@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     SUPPORT_USERNAME: str
     DONATE_URL: str
     DATABASE_NAME: str
+    DATABASE_PATH: str
 
     class Config:
         env_file = ".env"

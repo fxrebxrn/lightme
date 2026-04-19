@@ -108,10 +108,10 @@ async def download_db(message: types.Message):
     if message.from_user.id != settings.ADMIN_ID:
         return
 
-    db_path = "/app/data/database.db"
+    db_path = settings.DATABASE_PATH
     if os.path.exists(db_path):
         db_file = FSInputFile(db_path, filename='database.db')
-        await message.answer_document(db_file, caption="📂 База даних з Volume (/app/data)")
+        await message.answer_document(db_file, caption="База даних")
     else:
         try:
             content = os.listdir('/app/data')
